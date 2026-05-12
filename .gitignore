@@ -8,10 +8,20 @@ __pycache__/
 *.py[cod]
 .venv/
 /build/
+dist/
+*.egg-info/
+.pytest_cache/
+*.whl
 
 # Next.js
+frontend/node_modules/
 .next/
 out/
+
+# IDE
+.vscode/
+.idea/
+*.swp
 
 # OS
 .DS_Store
