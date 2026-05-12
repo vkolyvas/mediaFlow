@@ -1,0 +1,26 @@
+[project]
+name = "mediaflow"
+version = "0.1.0"
+description = "Synchronous content repurposing pipeline"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",
+    "aiosqlite>=0.20.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "tiktoken>=0.8.0",
+    "python-multipart>=0.0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.25.0",
+    "httpx>=0.28.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

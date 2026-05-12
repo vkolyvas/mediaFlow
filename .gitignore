@@ -1,0 +1,18 @@
+# Environment variables (contains secrets)
+.env
+.env.local
+*.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+/build/
+
+# Next.js
+.next/
+out/
+
+# OS
+.DS_Store
+Thumbs.db
