@@ -1,12 +1,11 @@
 """
 POST /api/generate — thin transport adapter.
 
-Does NOT block on rendering. Submits job and returns immediately.
-Orchestrator runs synchronously for now, but the contract is:
-submit → return job_id → job runs in background (future queue).
+Submits job and returns immediately. Pipeline runs in background
+via FastAPI BackgroundTasks — does not block the request lifecycle.
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks, HTTPException
 
 from ..schemas import GenerateVideoRequest, GenerateVideoResponse
 from ...pipeline.orchestrator import PipelineOrchestrator
@@ -19,25 +18,32 @@ def get_orchestrator() -> PipelineOrchestrator:
 
 
 @router.post("", response_model=GenerateVideoResponse)
-async def generate_video(request: GenerateVideoRequest):
+async def generate_video(
+    request: GenerateVideoRequest,
+    background_tasks: BackgroundTasks,
+):
     """
     Submit a video generation job.
 
-    Returns immediately with job_id. Orchestrator handles all pipeline logic.
+    Returns immediately with job_id. Pipeline executes in background.
+    Poll GET /api/jobs/{job_id} for status updates.
     """
     orchestrator = get_orchestrator()
 
     try:
-        _ctx, job = await orchestrator.generate_video(
+        job_id, context, job = await orchestrator.create_job(
             transcript=request.transcript,
             persona_id=request.persona_id,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to create job: {str(e)}")
+
+    # Run pipeline in background — request returns immediately
+    background_tasks.add_task(orchestrator.run_pipeline, job_id, context, job)
 
     return GenerateVideoResponse(
-        job_id=job.job_id,
+        job_id=job_id,
         state=job.state.name,
     )

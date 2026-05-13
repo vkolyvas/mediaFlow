@@ -92,24 +92,17 @@ class PipelineOrchestrator:
         )
         return MiniMaxTTSProvider(client=client, storage=self.storage)
 
-    async def generate_video(
+    async def create_job(
         self,
         transcript: str,
         persona_id: str,
         job_id: Optional[str] = None,
-    ) -> tuple[GenerationContext, PipelineJob]:
+    ) -> tuple[str, GenerationContext, PipelineJob]:
         """
-        Execute full generation pipeline with checkpoint persistence.
+        Create job record and initial context. Does not execute pipeline stages.
 
-        Returns (context, job) with result or error state.
-
-        Pipeline stages:
-        1. Load persona
-        2. Generate script (hook + body)
-        3. Generate TTS audio
-        4. Align captions via Whisper
-        5. Build scene manifest
-        6. Render to MP4
+        Returns (job_id, context, job) for immediate response while
+        pipeline stages run in background.
         """
         job_id = job_id or str(uuid.uuid4())[:8]
 
@@ -140,6 +133,19 @@ class PipelineOrchestrator:
         await self.repo.save_context(context)
         await self.repo.save_artifacts(job_id, context.artifacts)
 
+        return job_id, context, job
+
+    async def run_pipeline(
+        self,
+        job_id: str,
+        context: GenerationContext,
+        job: PipelineJob,
+    ) -> tuple[GenerationContext, PipelineJob]:
+        """
+        Execute pipeline stages for an existing job.
+
+        Idempotent — safe to call via BackgroundTasks after create_job().
+        """
         # Stage 1: Script generation
         try:
             context = await self._generate_script(context)
