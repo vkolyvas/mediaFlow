@@ -14,7 +14,7 @@ import time
 import traceback
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from ..personas import PersonaManager, get_persona_manager, Persona
 from ..services.minimax import (
@@ -39,11 +39,13 @@ from .models import PipelineJob
 DEFAULT_OUTPUT_DIR = "/tmp/mediaflow/output"
 DEFAULT_STORAGE_ROOT = "/tmp/mediaflow/storage"
 
-# Stage dispatch table — maps state → handler method
-STAGE_HANDLERS = {
-    PipelineState.SCRIPT_GENERATED: "_generate_tts",
-    PipelineState.TTS_GENERATED: "_align_captions",
-    PipelineState.CAPTIONS_ALIGNED: "_render",
+
+# Declarative stage dispatch table:
+# Maps current state → (handler method name, next state after success)
+_STAGE_HANDLER_NAMES: dict[PipelineState, tuple[str, PipelineState]] = {
+    PipelineState.SCRIPT_GENERATED: ("_generate_tts", PipelineState.TTS_GENERATED),
+    PipelineState.TTS_GENERATED: ("_align_captions", PipelineState.CAPTIONS_ALIGNED),
+    PipelineState.CAPTIONS_ALIGNED: ("_render", PipelineState.COMPLETED),
 }
 
 
@@ -163,7 +165,7 @@ class PipelineOrchestrator:
         try:
             context = await self._render(context)
             context.output_path = str(self.output_dir / context.job_id / "render.mp4") if context.render_manifest else None
-            return self._finalize_success(job, context)
+            return await self._finalize_success(job, context)
         except Exception as e:
             return await self._finalize_failure(job, context, PipelineState.CAPTIONS_ALIGNED, e)
 
@@ -172,7 +174,7 @@ class PipelineOrchestrator:
         Resume a partial job from disk.
 
         Loads context, inspects state, continues from next valid stage
-        using the stage dispatch table.
+        using the declarative stage dispatch table.
         """
         job = await self.repo.load_job(job_id)
         context = await self.repo.load_context(job_id)
@@ -189,23 +191,25 @@ class PipelineOrchestrator:
             )
 
         # Use dispatch table to run all remaining stages
-        next_state = state
-        while next_state != PipelineState.COMPLETED and next_state != PipelineState.FAILED:
-            handler_name = STAGE_HANDLERS.get(next_state)
-            if not handler_name:
-                raise ValueError(f"No handler for state {next_state}")
+        current_state = state
+        while current_state not in (PipelineState.COMPLETED, PipelineState.FAILED):
+            entry = STAGE_HANDLERS.get(current_state)
+            if not entry:
+                raise ValueError(f"No handler configured for state {current_state}")
 
+            handler_name, target_state = entry
             handler = getattr(self, handler_name)
             try:
                 context = await handler(context)
             except Exception as e:
-                return await self._finalize_failure(job, context, next_state, e)
+                return await self._finalize_failure(job, context, current_state, e)
 
-            # Advance to next state
-            next_state = PipelineState[handler.__name__.removeprefix("_generate_").upper()]
-            await self._advance_stage(context, job, next_state)
+            if target_state == PipelineState.COMPLETED:
+                return await self._finalize_success(job, context)
 
-        # If we exit loop on COMPLETED, job state is already set
+            await self._advance_stage(context, job, target_state)
+            current_state = target_state
+
         return context, job
 
     async def _advance_stage(
@@ -224,17 +228,21 @@ class PipelineOrchestrator:
         await self.repo.save_context(ctx)
         await self.repo.save_artifacts(job.job_id, ctx.artifacts)
 
-    def _finalize_success(self, job: PipelineJob, ctx: GenerationContext) -> tuple[GenerationContext, PipelineJob]:
-        """Mark job as COMPLETED with timing metadata."""
+    async def _finalize_success(
+        self,
+        job: PipelineJob,
+        ctx: GenerationContext,
+    ) -> tuple[GenerationContext, PipelineJob]:
+        """Mark job as COMPLETED with timing metadata and persist."""
         job.state = PipelineState.COMPLETED
         job.completed_at = time.time()
         job.duration_sec = job.completed_at - (job.started_at or job.created_at)
         job.updated_at = time.time()
-        # Persist one final time
-        import asyncio
-        asyncio.get_event_loop().run_until_complete(self.repo.save_job(job))
-        asyncio.get_event_loop().run_until_complete(self.repo.save_context(ctx))
-        asyncio.get_event_loop().run_until_complete(self.repo.save_artifacts(job.job_id, ctx.artifacts))
+
+        await self.repo.save_job(job)
+        await self.repo.save_context(ctx)
+        await self.repo.save_artifacts(job.job_id, ctx.artifacts)
+
         return ctx, job
 
     async def _finalize_failure(
