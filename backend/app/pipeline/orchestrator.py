@@ -39,6 +39,13 @@ from .models import PipelineJob
 DEFAULT_OUTPUT_DIR = "/tmp/mediaflow/output"
 DEFAULT_STORAGE_ROOT = "/tmp/mediaflow/storage"
 
+# Stage dispatch table — maps state → handler method
+STAGE_HANDLERS = {
+    PipelineState.SCRIPT_GENERATED: "_generate_tts",
+    PipelineState.TTS_GENERATED: "_align_captions",
+    PipelineState.CAPTIONS_ALIGNED: "_render",
+}
+
 
 class PipelineOrchestrator:
     """
@@ -136,43 +143,36 @@ class PipelineOrchestrator:
             context = await self._generate_script(context)
             await self._advance_stage(context, job, PipelineState.SCRIPT_GENERATED)
         except Exception as e:
-            return await self._fail(job, context, PipelineState.CREATED, e)
+            return await self._finalize_failure(job, context, PipelineState.CREATED, e)
 
         # Stage 2: TTS generation (idempotent — skip if voice_asset exists)
         try:
             context = await self._generate_tts(context)
             await self._advance_stage(context, job, PipelineState.TTS_GENERATED)
         except Exception as e:
-            return await self._fail(job, context, PipelineState.SCRIPT_GENERATED, e)
+            return await self._finalize_failure(job, context, PipelineState.SCRIPT_GENERATED, e)
 
         # Stage 3: Caption alignment
         try:
             context = await self._align_captions(context)
             await self._advance_stage(context, job, PipelineState.CAPTIONS_ALIGNED)
         except Exception as e:
-            return await self._fail(job, context, PipelineState.TTS_GENERATED, e)
+            return await self._finalize_failure(job, context, PipelineState.TTS_GENERATED, e)
 
         # Stage 4: Build manifest + render
         try:
             context = await self._render(context)
-            job.state = PipelineState.COMPLETED
-            job.completed_at = time.time()
-            job.duration_sec = job.completed_at - (job.started_at or job.created_at)
             context.output_path = str(self.output_dir / context.job_id / "render.mp4") if context.render_manifest else None
-            await self.repo.save_job(job)
-            await self.repo.save_context(context)
-            await self.repo.save_artifacts(job.job_id, context.artifacts)
-            job.updated_at = time.time()
+            return self._finalize_success(job, context)
         except Exception as e:
-            return await self._fail(job, context, PipelineState.CAPTIONS_ALIGNED, e)
-
-        return context, job
+            return await self._finalize_failure(job, context, PipelineState.CAPTIONS_ALIGNED, e)
 
     async def resume_job(self, job_id: str) -> tuple[GenerationContext, PipelineJob]:
         """
         Resume a partial job from disk.
 
-        Loads context, inspects state, continues from next valid stage.
+        Loads context, inspects state, continues from next valid stage
+        using the stage dispatch table.
         """
         job = await self.repo.load_job(job_id)
         context = await self.repo.load_context(job_id)
@@ -188,37 +188,25 @@ class PipelineOrchestrator:
                 job_id=job_id,
             )
 
-        if state == PipelineState.SCRIPT_GENERATED:
-            context = await self._generate_tts(context)
-            await self._advance_stage(context, job, PipelineState.TTS_GENERATED)
-            context = await self._align_captions(context)
-            await self._advance_stage(context, job, PipelineState.CAPTIONS_ALIGNED)
-            context = await self._render(context)
-            job.state = PipelineState.COMPLETED
-            job.completed_at = time.time()
-            job.duration_sec = job.completed_at - (job.started_at or job.created_at)
-            await self.repo.save_job(job)
-            return context, job
+        # Use dispatch table to run all remaining stages
+        next_state = state
+        while next_state != PipelineState.COMPLETED and next_state != PipelineState.FAILED:
+            handler_name = STAGE_HANDLERS.get(next_state)
+            if not handler_name:
+                raise ValueError(f"No handler for state {next_state}")
 
-        if state == PipelineState.TTS_GENERATED:
-            context = await self._align_captions(context)
-            await self._advance_stage(context, job, PipelineState.CAPTIONS_ALIGNED)
-            context = await self._render(context)
-            job.state = PipelineState.COMPLETED
-            job.completed_at = time.time()
-            job.duration_sec = job.completed_at - (job.started_at or job.created_at)
-            await self.repo.save_job(job)
-            return context, job
+            handler = getattr(self, handler_name)
+            try:
+                context = await handler(context)
+            except Exception as e:
+                return await self._finalize_failure(job, context, next_state, e)
 
-        if state == PipelineState.CAPTIONS_ALIGNED:
-            context = await self._render(context)
-            job.state = PipelineState.COMPLETED
-            job.completed_at = time.time()
-            job.duration_sec = job.completed_at - (job.started_at or job.created_at)
-            await self.repo.save_job(job)
-            return context, job
+            # Advance to next state
+            next_state = PipelineState[handler.__name__.removeprefix("_generate_").upper()]
+            await self._advance_stage(context, job, next_state)
 
-        raise ValueError(f"Cannot resume from state {state}")
+        # If we exit loop on COMPLETED, job state is already set
+        return context, job
 
     async def _advance_stage(
         self,
@@ -235,6 +223,53 @@ class PipelineOrchestrator:
         await self.repo.save_job(job)
         await self.repo.save_context(ctx)
         await self.repo.save_artifacts(job.job_id, ctx.artifacts)
+
+    def _finalize_success(self, job: PipelineJob, ctx: GenerationContext) -> tuple[GenerationContext, PipelineJob]:
+        """Mark job as COMPLETED with timing metadata."""
+        job.state = PipelineState.COMPLETED
+        job.completed_at = time.time()
+        job.duration_sec = job.completed_at - (job.started_at or job.created_at)
+        job.updated_at = time.time()
+        # Persist one final time
+        import asyncio
+        asyncio.get_event_loop().run_until_complete(self.repo.save_job(job))
+        asyncio.get_event_loop().run_until_complete(self.repo.save_context(ctx))
+        asyncio.get_event_loop().run_until_complete(self.repo.save_artifacts(job.job_id, ctx.artifacts))
+        return ctx, job
+
+    async def _finalize_failure(
+        self,
+        job: PipelineJob,
+        ctx: GenerationContext,
+        from_state: PipelineState,
+        exc: Exception,
+    ) -> tuple[GenerationContext, PipelineJob]:
+        """Transition to FAILED with structured error metadata and timing."""
+        error_msg = str(exc)
+        stack = traceback.format_exc()
+
+        ctx.error = error_msg
+        ctx.last_error = {
+            "stage": from_state.name,
+            "error_type": type(exc).__name__,
+            "message": error_msg,
+            "traceback": stack,
+            "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
+        }
+        ctx.log_transition(from_state, PipelineState.FAILED, time.time(), error_msg)
+
+        job.state = PipelineState.FAILED
+        job.error_message = error_msg
+        job.completed_at = time.time()
+        if job.started_at:
+            job.duration_sec = job.completed_at - job.started_at
+        job.updated_at = time.time()
+
+        await self.repo.save_job(job)
+        await self.repo.save_context(ctx)
+        await self.repo.save_error(job.job_id, ctx.last_error)
+
+        return ctx, job
 
     async def _generate_script(self, ctx: GenerationContext) -> GenerationContext:
         """Generate TikTok script from transcript using persona."""
@@ -402,43 +437,3 @@ Transcript:
             raise RuntimeError(error)
 
         return ctx
-
-    async def _fail(
-        self,
-        job: PipelineJob,
-        ctx: GenerationContext,
-        from_state: PipelineState,
-        exc: Exception,
-    ) -> tuple[GenerationContext, PipelineJob]:
-        """Transition to FAILED with structured error metadata."""
-        error_msg = str(exc)
-        stack = traceback.format_exc()
-
-        ctx.error = error_msg
-        ctx.last_error = {
-            "stage": from_state.name,
-            "error_type": type(exc).__name__,
-            "message": error_msg,
-            "traceback": stack,
-            "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
-        }
-        ctx.log_transition(from_state, PipelineState.FAILED, time.time(), error_msg)
-
-        job.state = PipelineState.FAILED
-        job.error_message = error_msg
-        job.completed_at = time.time()
-        if job.started_at:
-            job.duration_sec = job.completed_at - job.started_at
-        job.updated_at = time.time()
-
-        await self.repo.save_job(job)
-        await self.repo.save_context(ctx)
-        await self.repo.save_error(job.job_id, {
-            "stage": from_state.name,
-            "error_type": type(exc).__name__,
-            "message": error_msg,
-            "traceback": stack,
-            "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
-        })
-
-        return ctx, job
