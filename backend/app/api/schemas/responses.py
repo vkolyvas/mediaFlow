@@ -5,6 +5,21 @@ Response DTOs — external output shapes.
 from typing import Optional
 from pydantic import BaseModel
 
+# State → progress percentage mapping
+_STATE_PROGRESS = {
+    "CREATED": 0,
+    "SCRIPT_GENERATED": 25,
+    "TTS_GENERATED": 50,
+    "CAPTIONS_ALIGNED": 75,
+    "RENDERING": 90,
+    "COMPLETED": 100,
+    "FAILED": -1,
+}
+
+
+def _progress_for_state(state: str) -> int:
+    return _STATE_PROGRESS.get(state, 0)
+
 
 class GenerateVideoResponse(BaseModel):
     """Minimal response after job creation."""
@@ -19,6 +34,7 @@ class JobStatusResponse(BaseModel):
     job_id: str
     persona_id: str
     state: str
+    progress: int
     transcript_length: int
     script_length: int
     created_at: float
@@ -27,6 +43,7 @@ class JobStatusResponse(BaseModel):
     completed_at: Optional[float] = None
     duration_sec: Optional[float] = None
     output_path: Optional[str] = None
+    download_url: Optional[str] = None
     error: Optional[dict] = None
 
 

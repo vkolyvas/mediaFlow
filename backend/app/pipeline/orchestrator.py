@@ -10,6 +10,8 @@ Pipeline flow:
                                                                    FAILED
 """
 
+import logging
+import shutil
 import time
 import traceback
 import uuid
@@ -36,8 +38,23 @@ from .states import PipelineState
 from .models import PipelineJob
 
 
+logger = logging.getLogger(__name__)
+
 DEFAULT_OUTPUT_DIR = "/tmp/mediaflow/output"
 DEFAULT_STORAGE_ROOT = "/tmp/mediaflow/storage"
+
+
+def validate_external_dependencies() -> list[str]:
+    """
+    Check required external tools are available.
+
+    Returns list of missing tools. Empty if all present.
+    """
+    missing = []
+    for tool in ["ffmpeg"]:
+        if not shutil.which(tool):
+            missing.append(tool)
+    return missing
 
 
 # Declarative stage dispatch table:
@@ -79,6 +96,11 @@ class PipelineOrchestrator:
         self.renderer = FFmpegRenderEngine(workspace_dir=str(self.output_dir))
         self.tts_provider = tts_provider
         self.repo = repo or JsonPipelineRepository(root=DEFAULT_STORAGE_ROOT)
+
+        # Validate external tools at startup
+        missing = validate_external_dependencies()
+        if missing:
+            logger.warning(f"Missing external tools: {missing}")
 
     def _get_tts_provider(self) -> TTSProvider:
         """Lazy-create TTS provider when needed."""
@@ -190,11 +212,8 @@ class PipelineOrchestrator:
             return context, job
 
         if state == PipelineState.CREATED:
-            return await self.generate_video(
-                transcript=context.transcript,
-                persona_id=context.persona.persona_id,
-                job_id=job_id,
-            )
+            # Job exists but stages never ran — run pipeline on existing context
+            return await self.run_pipeline(job_id, context, job)
 
         # Use dispatch table to run all remaining stages
         current_state = state
@@ -233,6 +252,14 @@ class PipelineOrchestrator:
         await self.repo.save_job(job)
         await self.repo.save_context(ctx)
         await self.repo.save_artifacts(job.job_id, ctx.artifacts)
+        logger.info(
+            "stage_completed",
+            extra={
+                "job_id": job.job_id,
+                "stage": new_state.name,
+                "script_length": job.script_length,
+            },
+        )
 
     async def _finalize_success(
         self,
@@ -282,6 +309,17 @@ class PipelineOrchestrator:
         await self.repo.save_job(job)
         await self.repo.save_context(ctx)
         await self.repo.save_error(job.job_id, ctx.last_error)
+
+        logger.error(
+            "stage_failed",
+            extra={
+                "job_id": job.job_id,
+                "stage": from_state.name,
+                "error_type": type(exc).__name__,
+                "error_message": error_msg,
+                "duration_sec": job.duration_sec,
+            },
+        )
 
         return ctx, job
 
