@@ -159,7 +159,7 @@ class PipelineOrchestrator:
             job.completed_at = time.time()
             job.duration_sec = job.completed_at - (job.started_at or job.created_at)
             context.output_path = str(self.output_dir / context.job_id / "render.mp4") if context.render_manifest else None
-            await self.repo.update_state(job.job_id, PipelineState.COMPLETED)
+            await self.repo.save_job(job)
             await self.repo.save_context(context)
             await self.repo.save_artifacts(job.job_id, context.artifacts)
             job.updated_at = time.time()
@@ -195,7 +195,9 @@ class PipelineOrchestrator:
             await self._advance_stage(context, job, PipelineState.CAPTIONS_ALIGNED)
             context = await self._render(context)
             job.state = PipelineState.COMPLETED
-            await self.repo.update_state(job_id, PipelineState.COMPLETED)
+            job.completed_at = time.time()
+            job.duration_sec = job.completed_at - (job.started_at or job.created_at)
+            await self.repo.save_job(job)
             return context, job
 
         if state == PipelineState.TTS_GENERATED:
@@ -203,13 +205,17 @@ class PipelineOrchestrator:
             await self._advance_stage(context, job, PipelineState.CAPTIONS_ALIGNED)
             context = await self._render(context)
             job.state = PipelineState.COMPLETED
-            await self.repo.update_state(job_id, PipelineState.COMPLETED)
+            job.completed_at = time.time()
+            job.duration_sec = job.completed_at - (job.started_at or job.created_at)
+            await self.repo.save_job(job)
             return context, job
 
         if state == PipelineState.CAPTIONS_ALIGNED:
             context = await self._render(context)
             job.state = PipelineState.COMPLETED
-            await self.repo.update_state(job_id, PipelineState.COMPLETED)
+            job.completed_at = time.time()
+            job.duration_sec = job.completed_at - (job.started_at or job.created_at)
+            await self.repo.save_job(job)
             return context, job
 
         raise ValueError(f"Cannot resume from state {state}")
@@ -226,7 +232,7 @@ class PipelineOrchestrator:
         job.script_length = len(ctx.script or "") if ctx.script else 0
         job.updated_at = time.time()
         ctx.log_transition(previous, new_state, time.time())
-        await self.repo.update_state(job.job_id, new_state)
+        await self.repo.save_job(job)
         await self.repo.save_context(ctx)
         await self.repo.save_artifacts(job.job_id, ctx.artifacts)
 
@@ -420,8 +426,12 @@ Transcript:
 
         job.state = PipelineState.FAILED
         job.error_message = error_msg
+        job.completed_at = time.time()
+        if job.started_at:
+            job.duration_sec = job.completed_at - job.started_at
         job.updated_at = time.time()
 
+        await self.repo.save_job(job)
         await self.repo.save_context(ctx)
         await self.repo.save_error(job.job_id, {
             "stage": from_state.name,
@@ -430,6 +440,5 @@ Transcript:
             "traceback": stack,
             "timestamp": __import__("datetime").datetime.utcnow().isoformat(),
         })
-        await self.repo.update_state(job.job_id, PipelineState.FAILED)
 
         return ctx, job

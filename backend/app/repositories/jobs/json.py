@@ -45,6 +45,15 @@ class JsonPipelineRepository:
         paths.ensure_dirs()
         paths.job_file.write_text(json.dumps(job.to_dict(), indent=2))
 
+    async def save_job(self, job: PipelineJob) -> None:
+        """Atomically persist full job record."""
+        paths = self._paths(job.job_id)
+        if not paths.job_file.exists():
+            raise FileNotFoundError(f"No job found for {job.job_id}")
+        tmp = paths.job_file.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(job.to_dict(), indent=2))
+        tmp.rename(paths.job_file)
+
     async def save_context(self, ctx: GenerationContext) -> None:
         """
         Persist context atomically: write to .tmp then rename.
