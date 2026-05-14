@@ -103,7 +103,7 @@ async def run_generation(
 
     cleaned = cleanup_text(raw_text)
 
-    chunks = chunk_and_extract(cleaned, ai)
+    chunks = await chunk_and_extract(cleaned, ai)
     cleaned_text = cleaned[:5000]
 
     await db.execute(

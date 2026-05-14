@@ -13,7 +13,7 @@ def cleanup_text(text: str) -> str:
     return text.strip()
 
 
-def chunk_and_extract(cleaned_text: str, ai: LLMProvider) -> list[dict]:
+async def chunk_and_extract(cleaned_text: str, ai: LLMProvider) -> list[dict]:
     prompt = f"""You are a content analyst. Process this transcript in one pass.
 
 TASK:
@@ -31,9 +31,8 @@ OUTPUT FORMAT (JSON array only, no markdown):
 TRANSCRIPT:
 {cleaned_text}"""
 
-    import asyncio
     try:
-        result = asyncio.run(ai.generate(prompt, max_tokens=2048))
+        result = await ai.generate(prompt, max_tokens=2048)
     except Exception:
         return [{"chunk_type": "mixed", "content": cleaned_text, "confidence": 0.5}]
 

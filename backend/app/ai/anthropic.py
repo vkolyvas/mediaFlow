@@ -11,7 +11,6 @@ class AnthropicClaudeProvider(LLMProvider):
             model=kwargs.get("model", "claude-sonnet-4-20250514"),
             max_tokens=kwargs.get("max_tokens", 1024),
             messages=[{"role": "user", "content": prompt}],
-            thinking={"type": "disabled"},
         )
         block = response.content[0]
         return block.text if hasattr(block, "text") else str(block)
