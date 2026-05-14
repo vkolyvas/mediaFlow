@@ -2,6 +2,8 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
+    host: str = "127.0.0.1"
+    port: int = 8040
     anthropic_api_key: str = ""
     openai_api_key: str = ""
     minimax_api_key: str = ""

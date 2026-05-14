@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next build && next start",
     "build": "next build",
-    "start": "next start"
+    "start": "next start --port 3040"
   },
   "dependencies": {
     "autoprefixer": "^10.5.0",
