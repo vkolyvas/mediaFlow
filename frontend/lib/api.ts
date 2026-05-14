@@ -1,4 +1,4 @@
-const BASE = "/api";
+const BASE = process.env.NEXT_PUBLIC_API_URL || "/api";
 
 async function request<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, opts);
@@ -69,7 +69,7 @@ export const api = {
   getTranscript: (id: string) => request<Transcript>(`/transcripts/${id}`),
 
   generate: (projectId: string, transcriptId: string, templateId: string, subreddit?: string, platforms?: string[]) =>
-    request<{ run_id: string; status: string; posts: Post[] }>("/generate", {
+    request<{ run_id: string; status: string; posts: Post[] }>("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
