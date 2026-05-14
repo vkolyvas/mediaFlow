@@ -10,6 +10,7 @@ from .responses import (
     JobStatusResponse,
     JobLogsResponse,
     JobArtifactsResponse,
+    _progress_for_state,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "JobStatusResponse",
     "JobLogsResponse",
     "JobArtifactsResponse",
+    "_progress_for_state",
 ]

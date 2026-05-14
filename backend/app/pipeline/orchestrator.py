@@ -335,14 +335,14 @@ class PipelineOrchestrator:
 
         hook_prompt = f"""You are a TikTok scriptwriter for a {ctx.persona.speaking_style.value} persona.
 
-Generate 3 hook variants for this transcript. Each hook must:
+Generate 1 hook variant for this transcript. The hook must:
 - Start with a pattern interrupt (visual or auditory disruption)
 - Under 15 words
 - Create curiosity or emotion in the first second
 - No setup — dive straight in
 
-Return ONLY a JSON array of 3 hooks:
-["hook1", "hook2", "hook3"]
+Return ONLY a JSON array of 1 hook:
+["hook"]
 
 Transcript:
 {ctx.transcript[:500]}"""
@@ -367,7 +367,7 @@ Transcript:
             import json
             hooks_raw = await ai.generate(hook_prompt, max_tokens=500)
             hooks = json.loads(hooks_raw)
-            ctx.hook_variant = hooks[0] if isinstance(hooks, list) else hooks[0].get("hook", "")
+            ctx.hook_variant = hooks[0] if isinstance(hooks, list) and len(hooks) > 0 else hooks.get("hook", "")
         except Exception:
             ctx.hook_variant = ctx.transcript[:50] + "..."
 

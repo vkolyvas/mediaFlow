@@ -83,6 +83,7 @@ async def run_generation(
     template_id: str,
     subreddit: str,
     ai: LLMProvider,
+    platforms: list[str] | None = None,
 ) -> tuple[str, list[dict]]:
     import asyncio
 
@@ -146,7 +147,7 @@ async def run_generation(
             return build_reddit_prompt(chunks, subreddit)
         return ""
 
-    platforms = ["linkedin", "x", "tiktok", "reddit"]
+    platforms = platforms or ["linkedin", "x", "tiktok", "reddit"]
 
     async def generate_one(platform: str) -> dict:
         prompt = build_post_content(platform)

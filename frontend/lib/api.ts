@@ -68,7 +68,7 @@ export const api = {
 
   getTranscript: (id: string) => request<Transcript>(`/transcripts/${id}`),
 
-  generate: (projectId: string, transcriptId: string, templateId: string, subreddit?: string) =>
+  generate: (projectId: string, transcriptId: string, templateId: string, subreddit?: string, platforms?: string[]) =>
     request<{ run_id: string; status: string; posts: Post[] }>("/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -77,6 +77,7 @@ export const api = {
         transcript_id: transcriptId,
         template_id: templateId,
         subreddit: subreddit || "marketing",
+        platforms: platforms,
       }),
     }),
 

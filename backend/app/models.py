@@ -51,6 +51,7 @@ class GenerateRequest(BaseModel):
     transcript_id: str
     template_id: str
     subreddit: Optional[str] = "marketing"
+    platforms: Optional[list[str]] = None  # If not provided, generates for all platforms
 
 
 class GenerationRunResponse(BaseModel):

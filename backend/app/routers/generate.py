@@ -31,6 +31,7 @@ async def generate(
             template_id=body.template_id,
             subreddit=body.subreddit or "marketing",
             ai=ai,
+            platforms=body.platforms,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

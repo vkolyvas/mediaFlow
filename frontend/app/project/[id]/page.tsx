@@ -13,8 +13,22 @@ export default function ProjectPage() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState("");
   const [transcript, setTranscript] = useState("");
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(["linkedin", "x", "tiktok", "reddit"]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  const platformOptions = [
+    { id: "linkedin", label: "LinkedIn" },
+    { id: "x", label: "X/Twitter" },
+    { id: "tiktok", label: "TikTok" },
+    { id: "reddit", label: "Reddit" },
+  ];
+
+  function togglePlatform(id: string) {
+    setSelectedPlatforms((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]
+    );
+  }
 
   useEffect(() => {
     api.getProject(projectId).then((p) => setProjectName(p.name)).catch(() => {});
@@ -26,11 +40,15 @@ export default function ProjectPage() {
 
   async function handleGenerate() {
     if (!transcript.trim()) return;
+    if (selectedPlatforms.length === 0) {
+      setError("Select at least one platform");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const t = await api.createTranscript(projectId, transcript);
-      const result = await api.generate(projectId, t.id, selectedTemplate);
+      const result = await api.generate(projectId, t.id, selectedTemplate, undefined, selectedPlatforms);
       router.push(`/review/${result.run_id}`);
     } catch (e: any) {
       setError(e.message || "Generation failed");
@@ -52,6 +70,25 @@ export default function ProjectPage() {
           selected={selectedTemplate}
           onSelect={setSelectedTemplate}
         />
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <h2 className="text-sm font-semibold text-gray-300">Platforms</h2>
+        <div className="flex flex-wrap gap-2">
+          {platformOptions.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => togglePlatform(p.id)}
+              className={`px-4 py-2 rounded-lg border text-sm font-medium transition-all ${
+                selectedPlatforms.includes(p.id)
+                  ? "border-blue-500 bg-blue-950 text-blue-400"
+                  : "border-gray-700 bg-gray-900 text-gray-400 hover:border-gray-500"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
