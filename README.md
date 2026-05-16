@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/mediaFlow.svg" style="width: 60%; height: auto;">
+  <img src="assets/mediaflow_logo.svg" style="width: 50%; height: auto;">
 </p>
 
 <p align="center">
