@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "secbrain": {
+      "command": "secbrain",
+      "args": ["mcp"]
+    }
+  }
+}

@@ -58,9 +58,12 @@ export default function ProjectPage() {
 
   return (
     <div className="max-w-3xl mx-auto p-8 flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-bold">{projectName || "New Project"}</h1>
-        <p className="text-gray-400 text-sm mt-1">Select a template and paste your transcript</p>
+      <div className="flex items-center gap-3">
+        <img src="/assets/mediaflow_logo.svg" alt="mediaFlow" className="w-8 h-8" />
+        <div>
+          <h1 className="text-2xl font-bold">{projectName || "New Project"}</h1>
+          <p className="text-gray-400 text-sm mt-1">Select a template and paste your transcript</p>
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">

@@ -19,6 +19,7 @@ export default function HomePage() {
 
   return (
     <div className="max-w-2xl mx-auto p-8 flex flex-col items-center justify-center min-h-screen gap-6">
+      <img src="/assets/mediaflow_logo.svg" alt="mediaFlow" className="w-64 h-64" />
       <div className="text-center">
         <h1 className="text-4xl font-bold">mediaFlow</h1>
         <p className="text-gray-400 mt-2">Turn transcripts into platform-ready content</p>
