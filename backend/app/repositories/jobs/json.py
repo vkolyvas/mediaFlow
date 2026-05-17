@@ -196,10 +196,11 @@ class JsonPipelineRepository:
 
     def list_jobs(self) -> list[PipelineJob]:
         """List all jobs sorted by updated_at descending."""
-        if not self.root.exists():
+        jobs_root = self.root / "jobs"
+        if not jobs_root.exists():
             return []
         jobs = []
-        for job_dir in self.root.iterdir():
+        for job_dir in jobs_root.iterdir():
             if not job_dir.is_dir():
                 continue
             job_file = job_dir / "job.json"
