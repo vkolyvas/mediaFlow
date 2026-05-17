@@ -192,7 +192,9 @@ class PipelineOrchestrator:
         # Stage 4: Build manifest + render
         try:
             context = await self._render(context)
-            context.output_path = str(self.output_dir / context.job_id / "render.mp4") if context.render_manifest else None
+            # output_path is now set inside _render() — preserve it
+            if not context.output_path:
+                context.output_path = str(self.output_dir / context.job_id / "render.mp4") if context.render_manifest else None
             return await self._finalize_success(job, context)
         except Exception as e:
             return await self._finalize_failure(job, context, PipelineState.CAPTIONS_ALIGNED, e)
@@ -218,7 +220,7 @@ class PipelineOrchestrator:
         # Use dispatch table to run all remaining stages
         current_state = state
         while current_state not in (PipelineState.COMPLETED, PipelineState.FAILED):
-            entry = STAGE_HANDLERS.get(current_state)
+            entry = _STAGE_HANDLER_NAMES.get(current_state)
             if not entry:
                 raise ValueError(f"No handler configured for state {current_state}")
 
@@ -496,4 +498,5 @@ Transcript:
         if error:
             raise RuntimeError(error)
 
+        ctx.output_path = output_path
         return ctx
