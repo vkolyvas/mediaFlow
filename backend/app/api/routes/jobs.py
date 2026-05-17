@@ -191,3 +191,62 @@ async def download(job_id: str):
         filename=f"{job_id}.mp4",
         media_type="video/mp4",
     )
+
+
+@router.get("", response_model=list[JobStatusResponse])
+async def list_jobs():
+    """
+    List all jobs sorted by updated_at descending.
+    """
+    repo = get_repo()
+    all_jobs = repo.list_jobs()
+
+    result = []
+    for job in all_jobs:
+        try:
+            ctx = await repo.load_context(job.job_id)
+            error = await repo.load_error(job.job_id)
+            state_name = job.state.name
+            download_url = None
+            if state_name == "COMPLETED" and ctx.output_path:
+                download_url = f"/api/jobs/{job.job_id}/download"
+
+            result.append(JobStatusResponse(
+                job_id=job.job_id,
+                persona_id=job.persona_id,
+                state=state_name,
+                progress=_progress_for_state(state_name),
+                transcript_length=job.transcript_length,
+                script_length=job.script_length,
+                created_at=job.created_at,
+                updated_at=job.updated_at,
+                started_at=job.started_at,
+                completed_at=job.completed_at,
+                duration_sec=job.duration_sec,
+                output_path=ctx.output_path,
+                download_url=download_url,
+                error=error,
+            ))
+        except Exception:
+            continue
+
+    return result
+
+
+@router.delete("/{job_id}")
+async def delete_job(job_id: str):
+    """
+    Delete a job and all its associated data.
+    """
+    repo = get_repo()
+
+    try:
+        await repo.load_job(job_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    deleted = await repo.delete_job(job_id)
+    if not deleted:
+        raise HTTPException(status_code=500, detail="Failed to delete job")
+
+    return {"deleted": job_id}

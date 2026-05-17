@@ -108,6 +108,11 @@ export const api = {
   getJobStatus: (jobId: string) =>
     request<JobStatus>(`/jobs/${jobId}`),
 
+  listJobs: () => request<JobStatus[]>("/jobs"),
+
+  deleteJob: (jobId: string) =>
+    request<{ deleted: string }>(`/jobs/${jobId}`, { method: "DELETE" }),
+
   listPosts: (runId: string) => request<Post[]>(`/posts?generation_run_id=${runId}`),
 
   editPost: (postId: string, editedContent: string) =>

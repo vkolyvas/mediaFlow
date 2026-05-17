@@ -194,6 +194,33 @@ class JsonPipelineRepository:
             return {}
         return json.loads(paths.artifacts_file.read_text())
 
+    def list_jobs(self) -> list[PipelineJob]:
+        """List all jobs sorted by updated_at descending."""
+        if not self.root.exists():
+            return []
+        jobs = []
+        for job_dir in self.root.iterdir():
+            if not job_dir.is_dir():
+                continue
+            job_file = job_dir / "job.json"
+            if job_file.exists():
+                try:
+                    data = json.loads(job_file.read_text())
+                    jobs.append(PipelineJob.from_dict(data))
+                except Exception:
+                    continue
+        jobs.sort(key=lambda j: j.updated_at or j.created_at, reverse=True)
+        return jobs
+
+    async def delete_job(self, job_id: str) -> bool:
+        """Delete job directory and all its contents. Returns True if deleted."""
+        import shutil
+        paths = self._paths(job_id)
+        if paths.job_dir.exists():
+            shutil.rmtree(paths.job_dir)
+            return True
+        return False
+
     async def job_exists(self, job_id: str) -> bool:
         return self._paths(job_id).job_file.exists()
 
