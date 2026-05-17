@@ -107,7 +107,7 @@ class PipelineOrchestrator:
         if self.tts_provider:
             return self.tts_provider
         from ..providers.tts import MiniMaxTTSProvider
-        from ..app.config import settings
+        from ..config import settings
         client = MiniMaxClient(
             api_key=settings.minimax_api_key,
             base_url=settings.minimax_base_url,
@@ -326,7 +326,7 @@ class PipelineOrchestrator:
     async def _generate_script(self, ctx: GenerationContext) -> GenerationContext:
         """Generate TikTok script from transcript using persona."""
         from ..ai import AnthropicClaudeProvider
-        from ..app.config import settings
+        from ..config import settings
 
         if not settings.anthropic_api_key:
             raise ValueError("ANTHROPIC_API_KEY not configured")
@@ -389,6 +389,8 @@ Transcript:
         - voice.speed: speech rate multiplier
         - voice.pitch: pitch adjustment
         - voice.volume: volume level
+
+        Gracefully falls back to captions-only if TTS fails (rate limit, etc).
         """
         if not ctx.script:
             raise ValueError("No script to speak")
@@ -399,19 +401,25 @@ Transcript:
 
         voice = ctx.persona.voice
 
-        tts_provider = self._get_tts_provider()
-        result: TTSResult = await tts_provider.generate(
-            text=ctx.script,
-            voice_id=voice.voice_id,
-            speed=voice.speed,
-            pitch=voice.pitch,
-            volume=voice.volume,
-        )
+        try:
+            tts_provider = self._get_tts_provider()
+            result: TTSResult = await tts_provider.generate(
+                text=ctx.script,
+                voice_id=voice.voice_id,
+                speed=voice.speed,
+                pitch=voice.pitch,
+                volume=voice.volume,
+            )
 
-        ctx.voice_asset = str(result.audio_path)
-        ctx.artifacts["audio"] = result.audio_path
-        if result.raw_response_path:
-            ctx.artifacts["raw_tts_response"] = result.raw_response_path
+            ctx.voice_asset = str(result.audio_path)
+            ctx.artifacts["audio"] = result.audio_path
+            if result.raw_response_path:
+                ctx.artifacts["raw_tts_response"] = result.raw_response_path
+        except Exception as e:
+            # Graceful fallback: TTS unavailable (rate limit, wrong plan, etc)
+            # Continue with captions-only — no voice audio
+            ctx.voice_asset = None
+            ctx.artifacts["tts_error"] = str(e)
 
         return ctx
 

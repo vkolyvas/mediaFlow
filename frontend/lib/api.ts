@@ -47,6 +47,23 @@ export interface Post {
   edited_content: string | null;
 }
 
+export interface JobStatus {
+  job_id: string;
+  persona_id: string;
+  state: string;
+  progress: number;
+  transcript_length: number;
+  script_length: number;
+  created_at: number;
+  updated_at: number;
+  started_at: number | null;
+  completed_at: number | null;
+  duration_sec: number | null;
+  output_path: string | null;
+  download_url: string | null;
+  error: { message: string; stage: string } | null;
+}
+
 export const api = {
   createProject: (name: string) =>
     request<Project>("/projects", {
@@ -69,7 +86,7 @@ export const api = {
   getTranscript: (id: string) => request<Transcript>(`/transcripts/${id}`),
 
   generate: (projectId: string, transcriptId: string, templateId: string, subreddit?: string, platforms?: string[]) =>
-    request<{ run_id: string; status: string; posts: Post[] }>("/api/generate", {
+    request<{ run_id: string; status: string; posts: Post[] }>("/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -80,6 +97,16 @@ export const api = {
         platforms: platforms,
       }),
     }),
+
+  generateVideo: (transcript: string, personaId?: string) =>
+    request<{ job_id: string; state: string }>("/generate-video", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ transcript, persona_id: personaId || "expert_formal" }),
+    }),
+
+  getJobStatus: (jobId: string) =>
+    request<JobStatus>(`/jobs/${jobId}`),
 
   listPosts: (runId: string) => request<Post[]>(`/posts?generation_run_id=${runId}`),
 

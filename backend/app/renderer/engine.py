@@ -86,7 +86,8 @@ class FFmpegRenderEngine:
         if job.manifest.timeline and any((s.captions and s.captions.get("enabled")) for s in job.manifest.timeline):
             caption_output = self._render_captions(job, output)
 
-        return output, caption_output
+        final_output = caption_output if caption_output else output
+        return final_output, None
 
     def _build_render_command(self, job: RenderJob, output: str) -> Optional[list[str]]:
         manifest = job.manifest

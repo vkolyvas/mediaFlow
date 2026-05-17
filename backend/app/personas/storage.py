@@ -224,12 +224,14 @@ class PersonaManager:
     def get(self, persona_id: str) -> Optional[Persona]:
         """Load a persona by ID. Returns None if not found."""
         path = self._metadata_path(persona_id)
-        if not path.exists():
-            return None
+        if path.exists():
+            with open(path) as f:
+                data = json.load(f)
+            return self._deserialize(data)
 
-        with open(path) as f:
-            data = json.load(f)
-        return self._deserialize(data)
+        # Fallback: check preset registry for built-in personas
+        from .presets import PRESET_REGISTRY
+        return PRESET_REGISTRY.get(persona_id)
 
     def update(self, persona: Persona) -> Persona:
         """Update an existing persona. Raises if not found."""

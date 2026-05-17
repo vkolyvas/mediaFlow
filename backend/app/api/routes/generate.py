@@ -10,7 +10,7 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from ..schemas import GenerateVideoRequest, GenerateVideoResponse
 from ...pipeline.orchestrator import PipelineOrchestrator
 
-router = APIRouter(prefix="/api/generate", tags=["generate"])
+router = APIRouter(prefix="/api/generate-video", tags=["generate"])
 
 
 def get_orchestrator() -> PipelineOrchestrator:

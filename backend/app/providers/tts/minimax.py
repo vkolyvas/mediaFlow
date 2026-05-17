@@ -49,7 +49,7 @@ class MiniMaxTTSProvider:
         Submits job, polls until done, downloads audio, persists raw response.
         """
         request = {
-            "model": "speech-01",
+            "model": "speech-01-hd",
             "text": text,
             "voice_setting": {
                 "voice_id": voice_id,
@@ -57,7 +57,7 @@ class MiniMaxTTSProvider:
                 "pitch": pitch,
                 "volume": volume,
             },
-            "output_format": "aac",
+            "output_format": "url",
         }
 
         response = await self.client.submit_tts_job(request)

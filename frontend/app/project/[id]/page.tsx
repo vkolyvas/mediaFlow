@@ -56,6 +56,19 @@ export default function ProjectPage() {
     }
   }
 
+  async function handleGenerateVideo() {
+    if (!transcript.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      const result = await api.generateVideo(transcript);
+      router.push(`/video/${result.job_id}`);
+    } catch (e: any) {
+      setError(e.message || "Video generation failed");
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="max-w-3xl mx-auto p-8 flex flex-col gap-8">
       <div className="flex items-center gap-3">
@@ -109,6 +122,22 @@ export default function ProjectPage() {
           {error}
         </div>
       )}
+
+      <div className="flex flex-col gap-3 border border-gray-700 rounded-xl p-5 bg-gray-900">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-pink-400">TikTok Video</h2>
+            <p className="text-gray-400 text-sm mt-1">Generate a short-form video with voice and captions</p>
+          </div>
+          <button
+            onClick={handleGenerateVideo}
+            disabled={loading || !transcript.trim()}
+            className="px-6 py-3 bg-pink-600 hover:bg-pink-500 disabled:bg-gray-700 rounded-xl font-semibold text-white transition-colors"
+          >
+            {loading ? "Starting..." : "Generate Video"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

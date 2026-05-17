@@ -37,21 +37,18 @@ class MiniMaxClient:
         self.max_retries = max_retries
         self._session: Optional[httpx.AsyncClient] = None
 
-    async def __aenter__(self):
-        self._session = httpx.AsyncClient(
-            base_url=self.base_url,
-            timeout=httpx.Timeout(self.timeout),
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-        )
-        return self
-
-    async def __aexit__(self, *args):
-        if self._session:
-            await self._session.aclose()
-            self._session = None
+    async def _get_session(self) -> httpx.AsyncClient:
+        """Lazily create or return the shared session."""
+        if self._session is None:
+            self._session = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=httpx.Timeout(self.timeout),
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        return self._session
 
     async def _request(
         self,
@@ -60,13 +57,12 @@ class MiniMaxClient:
         json: Optional[dict] = None,
         params: Optional[dict] = None,
     ) -> dict[str, Any]:
-        if not self._session:
-            raise RuntimeError("MiniMaxClient must be used as async context manager")
+        session = await self._get_session()
 
         last_error: Exception | None = None
         for attempt in range(self.max_retries):
             try:
-                response = await self._session.request(
+                response = await session.request(
                     method=method,
                     url=path,
                     json=json,
@@ -128,7 +124,7 @@ class MiniMaxClient:
 
     async def submit_tts_job(self, request: dict[str, Any]) -> dict[str, Any]:
         """Submit a TTS generation job."""
-        return await self.post("/t2a", json=request)
+        return await self.post("/t2a_v2", json=request)
 
     async def get_tts_status(self, job_id: str) -> dict[str, Any]:
         """Poll TTS job status."""
