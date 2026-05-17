@@ -459,7 +459,7 @@ Transcript:
 
     async def _render(self, ctx: GenerationContext) -> GenerationContext:
         """Build manifest and render to MP4."""
-        duration = sum(w.end for w in ctx.captions) if ctx.captions else 30.0
+        duration = ctx.captions[-1].end if ctx.captions else 30.0
 
         scenes = [
             Scene(
