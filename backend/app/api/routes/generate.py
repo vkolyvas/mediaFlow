@@ -5,7 +5,8 @@ Submits job and returns immediately. Pipeline runs in background
 via FastAPI BackgroundTasks — does not block the request lifecycle.
 """
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
+import asyncio
 
 from ..schemas import GenerateVideoRequest, GenerateVideoResponse
 from ...pipeline.orchestrator import PipelineOrchestrator
@@ -17,11 +18,25 @@ def get_orchestrator() -> PipelineOrchestrator:
     return PipelineOrchestrator()
 
 
+async def _run_pipeline_async(job_id: str, transcript: str, persona_id: str):
+    """Wrapper to run pipeline in background with its own orchestrator instance."""
+    try:
+        orchestrator = PipelineOrchestrator()
+        # Create job
+        _, context, job = await orchestrator.create_job(
+            transcript=transcript,
+            persona_id=persona_id,
+            job_id=job_id,
+        )
+        # Run pipeline
+        await orchestrator.run_pipeline(job_id, context, job)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Background pipeline failed for {job_id}: {e}")
+
+
 @router.post("", response_model=GenerateVideoResponse)
-async def generate_video(
-    request: GenerateVideoRequest,
-    background_tasks: BackgroundTasks,
-):
+async def generate_video(request: GenerateVideoRequest):
     """
     Submit a video generation job.
 
@@ -40,8 +55,8 @@ async def generate_video(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create job: {str(e)}")
 
-    # Run pipeline in background — request returns immediately
-    background_tasks.add_task(orchestrator.run_pipeline, job_id, context, job)
+    # Run pipeline in background without blocking the request
+    asyncio.create_task(_run_pipeline_async(job_id, request.transcript, request.persona_id))
 
     return GenerateVideoResponse(
         job_id=job_id,
