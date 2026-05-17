@@ -213,13 +213,20 @@ class JsonPipelineRepository:
         return jobs
 
     async def delete_job(self, job_id: str) -> bool:
-        """Delete job directory and all its contents. Returns True if deleted."""
+        """Delete job directory, output files, and all associated data."""
         import shutil
         paths = self._paths(job_id)
+
+        # Delete job storage directory
         if paths.job_dir.exists():
             shutil.rmtree(paths.job_dir)
-            return True
-        return False
+
+        # Delete rendered output directory (e.g. /tmp/mediaflow/output/<job_id>)
+        output_dir = Path("/tmp/mediaflow/output") / job_id
+        if output_dir.exists():
+            shutil.rmtree(output_dir)
+
+        return True
 
     async def job_exists(self, job_id: str) -> bool:
         return self._paths(job_id).job_file.exists()
