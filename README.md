@@ -44,6 +44,13 @@ mediaFlow transforms long-form transcripts into platform-optimized content acros
 - **Job recovery** — interrupted generations resume on restart
 - **Local-first** — SQLite database, no external services required
 
+### Also in this repo
+
+- **[`weddingwise-demo/`](weddingwise-demo/)** — an automated demo-video pipeline that records a real
+  web app with Playwright, narrates it offline with Piper, and renders branded 1080p product
+  videos with Remotion. Currently used to produce the WeddingWise product walkthroughs (public
+  site, couples, vendors, planners).
+
 ---
 
 ## Quick Start

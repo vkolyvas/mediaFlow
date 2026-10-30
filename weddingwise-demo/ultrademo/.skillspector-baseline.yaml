@@ -1,0 +1,153 @@
+version: 1
+rules:
+- path: SECURITY-SCAN.md
+  reason: This report file documents the triaged findings and necessarily quotes the same keywords (.env, npx playwright, the keychain launch flag) that trigger them. Non-executable Markdown documentation.
+fingerprints:
+- hash: sha256:f1b545294e22fce7
+  rule_id: RP1
+  file: .claude/skills/ultrademo/SKILL.md
+  reason: 'False positive. User-run setup/update CLI invocations documented in install instructions: `npx skills add/update` is the skills.sh installer CLI that distributes this very skill, and `npx playwright install chromium` downloads the browser for the Playwright version pinned exactly by the committed package-lock.json. Neither is a remote MCP server and neither executes at skill runtime.'
+- hash: sha256:65e5a021b5847892
+  rule_id: RP1
+  file: README.md
+  reason: False positive. `npx playwright install chromium` is an npm dev-dependency setup step, not a remote MCP server. Playwright is pinned in package.json and locked exactly by the committed package-lock.json.
+- hash: sha256:d5c1e53a00ec4db0
+  rule_id: RP1
+  file: README.md
+  reason: 'False positive. User-run setup/update CLI invocations documented in install instructions: `npx skills add/update` is the skills.sh installer CLI that distributes this very skill, and `npx playwright install chromium` downloads the browser for the Playwright version pinned exactly by the committed package-lock.json. Neither is a remote MCP server and neither executes at skill runtime.'
+- hash: sha256:e0e8b2a56b1c01c6
+  rule_id: RP1
+  file: README.md
+  reason: 'False positive. User-run setup/update CLI invocations documented in install instructions: `npx skills add/update` is the skills.sh installer CLI that distributes this very skill, and `npx playwright install chromium` downloads the browser for the Playwright version pinned exactly by the committed package-lock.json. Neither is a remote MCP server and neither executes at skill runtime.'
+- hash: sha256:f486bb464b5e0518
+  rule_id: RP1
+  file: README.md
+  reason: 'False positive. User-run setup/update CLI invocations documented in install instructions: `npx skills add/update` is the skills.sh installer CLI that distributes this very skill, and `npx playwright install chromium` downloads the browser for the Playwright version pinned exactly by the committed package-lock.json. Neither is a remote MCP server and neither executes at skill runtime.'
+- hash: sha256:0a4f3adc8c4fe1af
+  rule_id: RP1
+  file: README.md
+  reason: 'False positive. User-run setup/update CLI invocations documented in install instructions: `npx skills add/update` is the skills.sh installer CLI that distributes this very skill, and `npx playwright install chromium` downloads the browser for the Playwright version pinned exactly by the committed package-lock.json. Neither is a remote MCP server and neither executes at skill runtime.'
+- hash: sha256:3794fa6dd7951443
+  rule_id: RP1
+  file: README.md
+  reason: 'False positive. User-run setup/update CLI invocations documented in install instructions: `npx skills add/update` is the skills.sh installer CLI that distributes this very skill, and `npx playwright install chromium` downloads the browser for the Playwright version pinned exactly by the committed package-lock.json. Neither is a remote MCP server and neither executes at skill runtime.'
+- hash: sha256:2f788bf9ce2dc51f
+  rule_id: RP1
+  file: SECURITY-SCAN.md
+  reason: False positive. `npx playwright install chromium` is an npm dev-dependency setup step, not a remote MCP server. Playwright is pinned in package.json and locked exactly by the committed package-lock.json.
+- hash: sha256:4c5f68932913e7d7
+  rule_id: RP1
+  file: scripts/doctor.mjs
+  reason: False positive. `npx playwright install chromium` is an npm dev-dependency setup step, not a remote MCP server. Playwright is pinned in package.json and locked exactly by the committed package-lock.json.
+- hash: sha256:548559711f181d7d
+  rule_id: AS3
+  file: .claude/skills/ultrademo-rerun/SKILL.md
+  reason: False positive. Relative-path cross-links between the two first-party skills this repo ships together (ultrademo and ultrademo-rerun) plus AGENTS.md pointing agents at that playbook. No third-party or peer-skill files are read.
+- &id001
+  hash: sha256:3ee29b9c22898463
+  rule_id: AS3
+  file: AGENTS.md
+  reason: False positive. Relative-path cross-links between the two first-party skills this repo ships together (ultrademo and ultrademo-rerun) plus AGENTS.md pointing agents at that playbook. No third-party or peer-skill files are read.
+- *id001
+- &id002
+  hash: sha256:db784d9a13ecece8
+  rule_id: AS3
+  file: AGENTS.md
+  reason: False positive. Relative-path cross-links between the two first-party skills this repo ships together (ultrademo and ultrademo-rerun) plus AGENTS.md pointing agents at that playbook. No third-party or peer-skill files are read.
+- *id002
+- hash: sha256:3241c3e37aa2e880
+  rule_id: AS3
+  file: README.md
+  reason: False positive. The README documents this repository's own two first-party skills (ultrademo, ultrademo-rerun) as its install instructions - first-party documentation, not enumeration of a user's installed skills.
+- &id003
+  hash: sha256:54caa15d4baaa2da
+  rule_id: AS3
+  file: SECURITY-SCAN.md
+  reason: False positive. Relative-path cross-links between the two first-party skills this repo ships together (ultrademo and ultrademo-rerun) plus AGENTS.md pointing agents at that playbook. No third-party or peer-skill files are read.
+- *id003
+- hash: sha256:2ab5de91774dd0f4
+  rule_id: E1
+  file: tts/tts.mjs
+  reason: False positive. tts.mjs posts narration text to the documented ElevenLabs text-to-speech endpoint using the user's own opt-in API key. This is the tool's core function, not data exfiltration.
+- hash: sha256:81fe39d7ab223314
+  rule_id: EA3
+  file: LICENSE
+  reason: False positive. Both hits are Apache-2.0 license boilerplate text ('including but not limited to ...') in the LICENSE file.
+- hash: sha256:c953dd76595375f6
+  rule_id: EA3
+  file: LICENSE
+  reason: False positive. Both hits are Apache-2.0 license boilerplate text ('including but not limited to ...') in the LICENSE file.
+- hash: sha256:0da10696b6828e2b
+  rule_id: EA1
+  file: SECURITY-SCAN.md
+  reason: False positive. Matches documentation/automation describing the tool's own stated purpose (driving a browser to capture a demo). No agency beyond the documented capture-and-render workflow.
+- hash: sha256:de240ff34a478cd4
+  rule_id: PE3
+  file: capture/capture.mjs
+  reason: False positive. Matches on .env / ELEVENLABS_API_KEY / APP_PASSWORD setup instructions (which tell users where to place their own values), the `--use-mock-keychain` Playwright launch flag, and a password typed into the target app's own login form. No credential files are read or transmitted.
+- hash: sha256:bc3dbf1c4f4c23c6
+  rule_id: PE3
+  file: capture/capture.mjs
+  reason: False positive. Matches on .env / ELEVENLABS_API_KEY / APP_PASSWORD setup instructions (which tell users where to place their own values), the `--use-mock-keychain` Playwright launch flag, and a password typed into the target app's own login form. No credential files are read or transmitted.
+- &id004
+  hash: sha256:d46d591cfb2a6ff9
+  rule_id: PE3
+  file: capture/capture.mjs
+  reason: False positive. Matches on .env / ELEVENLABS_API_KEY / APP_PASSWORD setup instructions (which tell users where to place their own values), the `--use-mock-keychain` Playwright launch flag, and a password typed into the target app's own login form. No credential files are read or transmitted.
+- *id004
+- hash: sha256:a2ce3d3c4e36ce65
+  rule_id: PE3
+  file: capture/flow-template.mjs
+  reason: False positive. Matches on .env / ELEVENLABS_API_KEY / APP_PASSWORD setup instructions (which tell users where to place their own values), the `--use-mock-keychain` Playwright launch flag, and a password typed into the target app's own login form. No credential files are read or transmitted.
+- hash: sha256:d262cc37c30c79a3
+  rule_id: PE3
+  file: package.json
+  reason: False positive. Matches on .env / ELEVENLABS_API_KEY / APP_PASSWORD setup instructions (which tell users where to place their own values), the `--use-mock-keychain` Playwright launch flag, and a password typed into the target app's own login form. No credential files are read or transmitted.
+- hash: sha256:d7184fd3c2fbad32
+  rule_id: PE3
+  file: scripts/doctor.mjs
+  reason: False positive. Matches on .env / ELEVENLABS_API_KEY / APP_PASSWORD setup instructions (which tell users where to place their own values), the `--use-mock-keychain` Playwright launch flag, and a password typed into the target app's own login form. No credential files are read or transmitted.
+- hash: sha256:537466ab584d11d1
+  rule_id: PE3
+  file: scripts/doctor.mjs
+  reason: False positive. Matches on .env / ELEVENLABS_API_KEY / APP_PASSWORD setup instructions (which tell users where to place their own values), the `--use-mock-keychain` Playwright launch flag, and a password typed into the target app's own login form. No credential files are read or transmitted.
+- hash: sha256:a919caf0a072ee11
+  rule_id: PE3
+  file: scripts/doctor.mjs
+  reason: False positive. Matches on .env / ELEVENLABS_API_KEY / APP_PASSWORD setup instructions (which tell users where to place their own values), the `--use-mock-keychain` Playwright launch flag, and a password typed into the target app's own login form. No credential files are read or transmitted.
+- hash: sha256:c6f2e286e326ca68
+  rule_id: PE3
+  file: tts/tts.mjs
+  reason: False positive. Matches on .env / ELEVENLABS_API_KEY / APP_PASSWORD setup instructions (which tell users where to place their own values), the `--use-mock-keychain` Playwright launch flag, and a password typed into the target app's own login form. No credential files are read or transmitted.
+- hash: sha256:242de0064c46e446
+  rule_id: SC1
+  file: package.json
+  reason: False positive. Dependencies use caret ranges in package.json but are pinned to exact versions by the committed package-lock.json, which ships in the repo.
+- hash: sha256:c724795422d7e282
+  rule_id: SC1
+  file: package.json
+  reason: False positive. Dependencies use caret ranges in package.json but are pinned to exact versions by the committed package-lock.json, which ships in the repo.
+- hash: sha256:6206ad797afb56f3
+  rule_id: SC1
+  file: package.json
+  reason: False positive. Dependencies use caret ranges in package.json but are pinned to exact versions by the committed package-lock.json, which ships in the repo.
+- hash: sha256:acddee55ce94b1ff
+  rule_id: SC1
+  file: package.json
+  reason: False positive. Dependencies use caret ranges in package.json but are pinned to exact versions by the committed package-lock.json, which ships in the repo.
+- hash: sha256:ec6317178de10dec
+  rule_id: SC1
+  file: package.json
+  reason: False positive. Dependencies use caret ranges in package.json but are pinned to exact versions by the committed package-lock.json, which ships in the repo.
+- hash: sha256:b5b923a356d90be9
+  rule_id: TM1
+  file: SECURITY-SCAN.md
+  reason: False positive. capture.mjs imports `rm` from node:fs/promises to clean the tool's own scratch and output directories, and setup helpers read app credentials from environment variables. Not a shell exec, dangerous glob, or forced flag.
+- hash: sha256:37c53589a4cc4c2e
+  rule_id: TM1
+  file: capture/capture.mjs
+  reason: False positive. capture.mjs imports `rm` from node:fs/promises to clean the tool's own scratch and output directories, and setup helpers read app credentials from environment variables. Not a shell exec, dangerous glob, or forced flag.
+- hash: sha256:7a03e6a2789d5bd1
+  rule_id: TM1
+  file: package-lock.json
+  reason: False positive. capture.mjs imports `rm` from node:fs/promises to clean the tool's own scratch and output directories, and setup helpers read app credentials from environment variables. Not a shell exec, dangerous glob, or forced flag.

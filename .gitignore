@@ -26,3 +26,8 @@ out/
 # OS
 .DS_Store
 Thumbs.db
+
+# WeddingWise demo video pipeline (weddingwise-demo/)
+# The scout tool symlinks ultrademo/node_modules for convenience.
+weddingwise-demo/scout/node_modules
+weddingwise-demo/ultrademo/.profiles/
