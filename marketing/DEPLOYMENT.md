@@ -8,11 +8,12 @@ what needs deploying in the app repo is the UTM capture branch.
 
 | Piece | Where | Status |
 | --- | --- | --- |
-| Postiz instance | `infra/postiz/` | compose written, not yet deployed - the host has no Docker yet |
+| Postiz instance | `infra/postiz/` | running on `localhost:4007` - admin account and API key created, no social accounts connected yet |
+| Docker Engine | the host | installed (29.9.2, compose v5.6.1) |
 | Instagram + Facebook accounts connected | in Postiz | needs Meta app credentials |
 | `ANTHROPIC_API_KEY` | the engine's environment | not present on this host |
-| UTM capture branch | `auth-weddingwise`, branch `feature/weddingwise-utm-capture` | committed, not merged, not deployed |
-| `MARKETING_INTERNAL_TOKEN` | both repos | to be generated |
+| UTM capture branch | `auth-weddingwise`, branch `feature/weddingwise-utm-capture` | PR open, not merged, not deployed |
+| `MARKETING_INTERNAL_TOKEN` / `WW_INTERNAL_TOKEN` | both repos | generated and set |
 
 ## 1. Postiz
 

@@ -14,6 +14,7 @@ Upstream: `gitroomhq/postiz-app`. Licence: **AGPL-3.0**.
 | `docker-compose.yml` | The stack, trimmed from upstream |
 | `.env.example` | Every setting, with the ones we need marked |
 | `setup.sh` | Checks Docker, writes `.env` with real secrets, starts the stack |
+| `dynamicconfig/development-sql.yaml` | The Temporal dynamic config upstream mounts |
 
 ## What was trimmed, and why
 
@@ -27,7 +28,9 @@ Upstream ships eight services. We run four:
 - **Spotlight** - removed. Error monitoring only.
 - **The second Postgres** - removed. Temporal now uses the `temporal`
   database on the same Postgres server as Postiz, which is what the
-  upstream `POSTGRES_SEEDS` mechanism is for.
+  upstream `POSTGRES_SEEDS` mechanism is for. The Postgres container is on
+  both networks so Temporal can reach it by name - upstream gives Temporal a
+  Postgres of its own, so it never has to.
 
 The result is four containers: `postiz`, `postiz-postgres`, `postiz-redis`,
 `temporal`.
@@ -43,9 +46,9 @@ point `TEMPORAL_ADDRESS` at it.
 - A public hostname with TLS in front of the container (Instagram's OAuth
   redirect will not accept `http://localhost`)
 
-The host this repo is developed on does not have Docker installed yet -
-`setup.sh` says so and prints the install command rather than failing
-obscurely.
+Docker is installed on the development host (Engine 29.9.2, compose v5.6.1).
+`setup.sh` still checks for it and prints the install command rather than
+failing obscurely.
 
 ## Bringing it up
 
@@ -55,13 +58,52 @@ cd marketing/infra/postiz
 ```
 
 That writes `.env` with a generated `JWT_SECRET` and `POSTGRES_PASSWORD`,
-starts the stack, and waits for the app to answer. Then:
+starts the stack, registers the search attributes Postiz needs, and waits for
+the app to answer. Then:
 
-1. Open the instance and create the first admin account.
-   `DISABLE_REGISTRATION` is set to `true` in the compose, so registration is
-   closed once the account exists.
+1. Create the first admin account - open `/register` in a browser, or:
+
+   ```bash
+   curl -X POST http://localhost:4007/api/auth/register \
+     -H 'Content-Type: application/json' \
+     -d '{"email":"you@weddingwise.gr","password":"...","company":"WeddingWise","provider":"LOCAL"}'
+   ```
+
+   `provider` is `LOCAL` for an email-and-password account. When the account
+   exists, set `DISABLE_REGISTRATION=true` in `.env` and restart the stack, so
+   nobody else can register.
 2. **Settings -> Public API** -> create a key. This is `POSTIZ_API_KEY`.
+   From a script it is `POST /api/user/api-key/rotate` with the session
+   cookie.
 3. **Integrations** -> connect Instagram and Facebook.
+
+## Three things that had to be fixed to make it run
+
+These are the difference between the upstream compose and one that actually
+comes up. Each one is a silent failure - the container starts and then the API
+never answers.
+
+**Temporal needs the dynamic config file.** Upstream mounts
+`./dynamicconfig` into the Temporal container and points
+`DYNAMIC_CONFIG_FILE_PATH` at `development-sql.yaml`. The image does not ship
+that file, so without the mount the Temporal server exits on start with
+`Unable to create dynamic config client`. The file is in `dynamicconfig/`.
+
+**Temporal has to be up before Postiz starts.** The Postiz backend registers
+its workflows with Temporal while booting and exits if Temporal is not
+reachable, so `postiz` waits for `temporal` to be *healthy* - not merely
+started. The healthcheck addresses the server the way the other containers do,
+by the container IP, because Temporal binds there and not on `127.0.0.1`.
+
+**Postiz needs two search attributes that Temporal will not give it.** The
+Temporal auto-setup registers `CustomStringField` and `CustomTextField` as
+`Text`, which uses up the `Text` slots Temporal preallocates. Postiz adds
+`organizationId` and `postId` as `Text` on boot and the server refuses them
+with *cannot have more than 3 search attribute of type Text* - the backend
+exits and never listens on port 3000, so nginx answers `502` forever.
+`setup.sh` registers the two attributes as `Keyword` before the backend
+starts; Postiz finds them already there and skips the add. `Keyword` is the
+right type for an id anyway.
 
 ## Wiring it to the marketing engine
 

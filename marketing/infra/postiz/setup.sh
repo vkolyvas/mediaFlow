@@ -16,7 +16,7 @@ docker is not installed on this host.
 
 Install Docker Engine (with the compose plugin) first:
 
-  sudo apt-get update && sudo apt-get install -y docker.io docker-compose-v2
+  sudo apt-get update && sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   sudo systemctl enable --now docker
   sudo usermod -aG docker "$USER"   # then log out and back in
 
@@ -49,6 +49,10 @@ if [ ! -f .env ]; then
   echo
 fi
 
+# shellcheck disable=SC1091
+set -a; . ./.env; set +a
+port="${POSTIZ_PORT:-4007}"
+
 if [ "${1:-}" = "--env-only" ]; then
   echo ".env is ready. Start the stack with: docker compose up -d"
   exit 0
@@ -57,12 +61,37 @@ fi
 echo "Starting Postiz..."
 docker compose up -d
 
-echo "Waiting for the app to answer..."
+# The Temporal auto-setup registers the legacy CustomStringField and
+# CustomTextField as Text, which uses up the Text slots Temporal preallocates.
+# Postiz's backend adds its own two attributes as Text on boot and the server
+# refuses them ("cannot have more than 3 search attribute of type Text"), so
+# the backend exits and never listens on port 3000.
+#
+# Registering the two attributes as Keyword first means Postiz finds them
+# already there and skips the add. Keyword is the right type for an id.
+echo "Waiting for Temporal..."
 for _ in $(seq 1 60); do
-  if curl -fsS -o /dev/null "http://localhost:${POSTIZ_PORT:-4007}/api/public/v1/integrations" 2>/dev/null; then
+  if [ "$(docker inspect -f '{{.State.Health.Status}}' temporal 2>/dev/null)" = "healthy" ]; then
     break
   fi
-  if curl -fsS -o /dev/null "http://localhost:${POSTIZ_PORT:-4007}" 2>/dev/null; then
+  sleep 2
+done
+
+temporal_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' temporal)"
+echo "Registering the search attributes Postiz needs (as Keyword)..."
+docker exec temporal temporal operator search-attribute create \
+  --namespace default --address "${temporal_ip}:7233" \
+  --name organizationId --type Keyword \
+  --name postId --type Keyword || true
+
+echo "Restarting Postiz so the backend finds them..."
+docker compose restart postiz
+
+echo "Waiting for the app to answer..."
+for _ in $(seq 1 60); do
+  code="$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:${port}/api/public/v1/integrations" 2>/dev/null || echo 000)"
+  # 401 means the API is up and asking for a key - that is the answer we want.
+  if [ "$code" = "401" ] || [ "$code" = "200" ]; then
     break
   fi
   sleep 2
@@ -75,7 +104,9 @@ cat <<'MSG'
 Postiz should be up.
 
 Next:
-  1. Open the instance and create the first admin account.
+  1. Open http://localhost:4007/register and create the first admin account.
+     Then set DISABLE_REGISTRATION=true in .env and restart, so nobody else
+     can register.
   2. Settings -> Public API -> create a key. Put it in marketing/.env as
      POSTIZ_API_KEY, and set POSTIZ_API_URL to the instance's /api base.
   3. Connect the Instagram and Facebook accounts under Integrations.

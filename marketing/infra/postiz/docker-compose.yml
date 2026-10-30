@@ -25,7 +25,9 @@ services:
       BACKEND_INTERNAL_URL: 'http://localhost:3000'
       TEMPORAL_ADDRESS: 'temporal:7233'
       IS_GENERAL: 'true'
-      DISABLE_REGISTRATION: 'true'
+      # Registration stays open so the first admin can be created. Lock it
+      # ('true') once that account exists - otherwise nobody can sign in.
+      DISABLE_REGISTRATION: '${DISABLE_REGISTRATION:-false}'
 
       # === Storage
       STORAGE_PROVIDER: '${STORAGE_PROVIDER}'
@@ -62,6 +64,10 @@ services:
         condition: service_healthy
       postiz-redis:
         condition: service_healthy
+      # The backend registers its workflows with Temporal during boot and
+      # exits if Temporal is not up yet, so this is not optional.
+      temporal:
+        condition: service_healthy
 
   postiz-postgres:
     image: postgres:17-alpine
@@ -75,6 +81,9 @@ services:
       - postgres-volume:/var/lib/postgresql/data
     networks:
       - postiz-network
+      # Temporal keeps its own database in this same server, so it has to
+      # reach it by name. It needs to be on the network Temporal is on.
+      - temporal-network
     healthcheck:
       test: pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}
       interval: 10s
@@ -115,8 +124,23 @@ services:
       - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
       - ENABLE_ES=false
       - TEMPORAL_NAMESPACE=default
+    volumes:
+      # The image does not ship development-sql.yaml. Without it Temporal
+      # exits on start, and without the search-attribute cache refresh the
+      # Postiz backend cannot register its own search attributes.
+      - ./dynamicconfig:/etc/temporal/config/dynamicconfig:ro
     networks:
       - temporal-network
+    healthcheck:
+      # The auto-setup container takes a while to create its schema. Until the
+      # frontend answers, the Postiz backend cannot register its workflows.
+      # The server binds to the container IP, not to 127.0.0.1, so the check
+      # has to address it the way the other containers do.
+      test: ['CMD-SHELL', 'tctl --address $(hostname -i):7233 workflow list >/dev/null 2>&1 || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
 
 volumes:
   postgres-volume:
