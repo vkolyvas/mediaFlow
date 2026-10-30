@@ -1,6 +1,11 @@
 import { env, requireEnv } from './config.mjs';
 
-const API_URL = 'https://api.anthropic.com/v1/messages';
+/**
+ * The Messages API endpoint. The host comes from the config, so the engine
+ * can talk to Anthropic's own API or to a gateway that speaks the same
+ * contract - the request shape below is identical either way.
+ */
+const API_PATH = '/v1/messages';
 
 /**
  * Anthropic client.
@@ -34,7 +39,7 @@ async function callApi({ prompt, system, model, maxTokens, temperature }) {
 
   let res;
   try {
-    res = await fetch(API_URL, {
+    res = await fetch(`${env.anthropicBaseUrl}${API_PATH}`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

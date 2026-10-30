@@ -203,9 +203,21 @@ export function getCampaign(id) {
 
 const POST_JSON_FIELDS = ['hashtags', 'script', 'media', 'vendor_refs'];
 
+/** campaign_id -> campaignId. The columns are snake_case; some callers read them camelCase. */
+function camelize(key) {
+  return key.replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+}
+
 export function rowToPost(row) {
   if (!row) return null;
   const post = { ...row };
+  // Both spellings, so a caller reading `post.campaignId` and a caller reading
+  // `post.campaign_id` get the same value. Without this the camelCase readers
+  // silently got undefined - and an undefined id binds to nothing in SQLite.
+  for (const [key, value] of Object.entries(row)) {
+    const camel = camelize(key);
+    if (camel !== key && post[camel] === undefined) post[camel] = value;
+  }
   for (const f of POST_JSON_FIELDS) {
     try {
       post[f] = JSON.parse(post[f] || 'null');

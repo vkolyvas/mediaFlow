@@ -1,6 +1,8 @@
 # Secrets
 .env
 .env.local
+# A backup of the env file holds the same secrets. It must never be committed.
+.env.bak*
 
 # Local database + generated artifacts
 .data/
@@ -10,6 +12,7 @@ assets/rendered/
 
 # Regenerated on every run
 content/calendar.json
+content/drafts/
 analytics/weekly-reports/
 analytics/validation/
 

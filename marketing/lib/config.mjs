@@ -34,6 +34,13 @@ export const env = {
   wwInternalToken: process.env.WW_INTERNAL_TOKEN || '',
   wwSiteUrl: (process.env.WW_SITE_URL || 'https://weddingwise.gr').replace(/\/+$/, ''),
   anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
+  /**
+   * The API base to talk to. Anthropic's own by default; a gateway that
+   * speaks the same Messages API (MiniMax's Anthropic-compatible endpoint,
+   * for one) is the same contract with a different host. Only the base
+   * changes - the request shape is identical.
+   */
+  anthropicBaseUrl: (process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com').replace(/\/+$/, ''),
   defaultModel: process.env.DEFAULT_MODEL || 'claude-sonnet-4-20250514',
   maxTokens: Number(process.env.MAX_TOKENS_PER_CALL || 4000),
   postizApiUrl: (process.env.POSTIZ_API_URL || 'http://localhost:4007/api').replace(/\/+$/, ''),
