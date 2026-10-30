@@ -1,0 +1,19 @@
+# Temporal dynamic config for the self-hosted Postiz instance.
+#
+# The same two keys that upstream mounts (gitroomhq/postiz-app,
+# dynamicconfig/development-sql.yaml). Upstream mounts the file into
+# /etc/temporal/config/dynamicconfig and points DYNAMIC_CONFIG_FILE_PATH at
+# it; without it the Temporal server exits on start.
+#
+# forceSearchAttributesCacheRefreshOnRead is the one that matters: without it
+# Temporal validates new search attributes against a stale cache and refuses
+# them with "cannot have more than 3 search attribute of type Text", which
+# stops the Postiz backend from booting.
+limit.maxIDLength:
+  - value: 255
+    constraints: {}
+
+system.forceSearchAttributesCacheRefreshOnRead:
+  # Dev setup only. Please don't turn this on in production.
+  - value: true
+    constraints: {}
