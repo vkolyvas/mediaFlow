@@ -1,0 +1,17 @@
+{
+  "_note": "The weekly publishing plan. Weekday numbers follow JS Date.getDay(): 1 = Monday, 0 = Sunday.",
+  "postsPerWeekPerAudience": 5,
+  "weekdayPlan": {
+    "1": { "pillar": "guides", "format": "carousel", "topic": "practical planning advice" },
+    "2": { "pillar": "discovery", "format": "reel", "topic": "vendor discovery by place and category" },
+    "3": { "pillar": "inspiration", "format": "carousel", "topic": "wedding inspiration and settings" },
+    "4": { "pillar": "product", "format": "reel", "topic": "WeddingWise product demonstration" },
+    "5": { "pillar": "engagement", "format": "reel", "topic": "couple engagement and polls" }
+  },
+  "weekendStories": {
+    "enabled": false,
+    "format": "story",
+    "topic": "weekend stories and reposts"
+  },
+  "audiences": ["el", "en"]
+}

@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.local
+
+# Local database + generated artifacts
+.data/
+out/
+assets/generated/
+assets/rendered/
+
+# Regenerated on every run
+content/calendar.json
+analytics/weekly-reports/
+analytics/validation/
+
+# node_modules
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db

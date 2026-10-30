@@ -1,0 +1,12 @@
+{
+  "_note": "Local posting times for the audience. The Greek stream is published in Athens time, the destination stream in the same clock - the audience of both is in Greece or planning for Greece.",
+  "timezone": "Europe/Athens",
+  "byPillar": {
+    "guides": { "hour": 10, "minute": 30 },
+    "discovery": { "hour": 18, "minute": 30 },
+    "inspiration": { "hour": 12, "minute": 0 },
+    "engagement": { "hour": 20, "minute": 0 },
+    "product": { "hour": 11, "minute": 0 }
+  },
+  "default": { "hour": 11, "minute": 0 }
+}
