@@ -83,7 +83,7 @@ function findCampaign(utm) {
   return rows[0]?.id || null;
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv);
   const since = new Date(Date.now() - args.days * 86400000).toISOString().slice(0, 10);
 
@@ -92,10 +92,8 @@ function main() {
     raw = JSON.parse(fs.readFileSync(args.file, 'utf8'));
     if (!Array.isArray(raw)) raw = raw.conversions || [];
   } else {
-    return fetchConversions(since).then((rows) => {
-      raw = rows;
-      console.log(`Fetched ${raw.length} conversion(s) since ${since}.`);
-    });
+    raw = await fetchConversions(since);
+    console.log(`Fetched ${raw.length} conversion(s) since ${since}.`);
   }
 
   let inserted = 0;
@@ -144,7 +142,7 @@ function main() {
 }
 
 try {
-  main();
+  await main();
 } catch (err) {
   console.error(err.message);
   closeDb();

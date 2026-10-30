@@ -15,6 +15,7 @@
     "reject": "node --env-file-if-exists=.env automation/approve-content.mjs --reject",
     "schedule": "node --env-file-if-exists=.env automation/schedule-content.mjs",
     "collect": "node --env-file-if-exists=.env automation/collect-analytics.mjs",
+    "collect-conversions": "node --env-file-if-exists=.env automation/collect-conversions.mjs",
     "report": "node --env-file-if-exists=.env automation/report.mjs",
     "status": "node --env-file-if-exists=.env automation/status.mjs",
     "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.mjs"
