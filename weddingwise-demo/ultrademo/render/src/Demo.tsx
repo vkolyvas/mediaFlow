@@ -16,10 +16,18 @@ const HOLD_AFTER_CLIP = 0.4; // minimum settle after a clip finishes
 const SLIDE_SECONDS = 3; // intro / outro title-card duration
 const TOPTAIL = 12; // frames of fade-from-black (open) and fade-to-black (close)
 
-// Source capture space is always 1920x1080; the vertical layout crops it.
+// Source capture space is always 1920x1080; every other layout crops it.
 const SRC = {width: 1920, height: 1080};
 
-export type Layout = 'wide' | 'vertical';
+export type Layout = 'wide' | 'vertical' | 'portrait' | 'square';
+
+// The four delivery formats. One capture, every aspect ratio.
+export const LAYOUT_SIZE: Record<Layout, {width: number; height: number}> = {
+  wide: {width: 1920, height: 1080}, // 16:9  - YouTube
+  vertical: {width: 1080, height: 1920}, // 9:16  - Reels / Shorts
+  portrait: {width: 1080, height: 1350}, // 4:5   - Instagram feed
+  square: {width: 1080, height: 1080}, // 1:1   - Instagram / LinkedIn feed
+};
 
 export type CursorEvent = {t: number; type: 'move' | 'click'; x: number; y: number};
 
@@ -140,7 +148,12 @@ const Cursor: React.FC<{scale: number}> = ({scale}) => (
   </svg>
 );
 
+// Captions are sized for the canvas width: 1080-wide layouts get the bigger
+// type, 1920-wide layouts a smaller one.
 const CAPTION_SIZE = {sm: {wide: 27, vertical: 33}, md: {wide: 34, vertical: 40}, lg: {wide: 42, vertical: 50}};
+const captionTier = (layout: Layout): 'wide' | 'vertical' => (layout === 'wide' ? 'wide' : 'vertical');
+const CAPTION_EDGE: Record<Layout, number> = {wide: 56, vertical: 140, portrait: 104, square: 80};
+const CAPTION_WIDTH: Record<Layout, number> = {wide: 1560, vertical: 960, portrait: 940, square: 900};
 
 const WORD_GREY = '#9aa3b5';
 
@@ -289,8 +302,8 @@ const Caption: React.FC<{
   const size = style.size ?? 'md';
   const position = style.position ?? 'bottom';
   const accent = style.accent ?? 'rgba(15,23,42,0.82)';
-  const fontSize = CAPTION_SIZE[size][layout];
-  const edge = layout === 'vertical' ? 140 : 56;
+  const fontSize = CAPTION_SIZE[size][captionTier(layout)];
+  const edge = CAPTION_EDGE[layout];
   const outline = outlineStyle(fontSize);
   const literalColor = style.literalColor ?? LITERAL_DEFAULT;
   // Word-highlight only when a style is set AND word timings exist (ElevenLabs).
@@ -302,7 +315,7 @@ const Caption: React.FC<{
           width: '100%',
           background: accent.startsWith('#') ? hexToRgba(accent, 0.9) : accent,
           color: '#f8fafc',
-          padding: layout === 'vertical' ? '26px 60px' : '22px 80px',
+          padding: layout === 'wide' ? '22px 80px' : '26px 60px',
           fontSize,
           lineHeight: 1.35,
           textAlign: 'center',
@@ -310,10 +323,10 @@ const Caption: React.FC<{
         }
       : theme === 'pill'
         ? {
-            maxWidth: layout === 'vertical' ? 940 : 1400,
+            maxWidth: layout === 'wide' ? 1400 : 940,
             background: accent.startsWith('#') ? hexToRgba(accent, 0.82) : accent,
             color: '#f8fafc',
-            padding: layout === 'vertical' ? '18px 34px' : '18px 34px',
+            padding: '18px 34px',
             borderRadius: 14,
             fontSize,
             lineHeight: 1.35,
@@ -322,7 +335,7 @@ const Caption: React.FC<{
           }
         : {
             // 'outline' / 'minimal': no box, light fill + dark stroke.
-            maxWidth: layout === 'vertical' ? 960 : 1560,
+            maxWidth: CAPTION_WIDTH[layout],
             color: '#ffffff',
             padding: '0 40px',
             fontSize,
@@ -417,12 +430,20 @@ const cropAnchorX = (scene: Scene): number => {
   return SRC.width / 2;
 };
 
-// Wraps 1920x1080 scene content so it covers a 1080x1920 canvas, cropped
-// around the scene's focus point (F14: one capture, every format).
-const VerticalCrop: React.FC<{scene: Scene; children: React.ReactNode}> = ({scene, children}) => {
-  const s = 1920 / SRC.height; // scale so source height fills the 1920px canvas
+// Wraps 1920x1080 scene content so it covers the target canvas, cropped around
+// the scene's focus point (F14: one capture, every format). The source is
+// scaled so its height fills the canvas; the horizontal anchor keeps the
+// point of interest in frame.
+const Crop: React.FC<{scene: Scene; layout: Layout; children: React.ReactNode}> = ({
+  scene,
+  layout,
+  children,
+}) => {
+  const target = LAYOUT_SIZE[layout];
+  const s = target.height / SRC.height; // scale so source height fills the canvas
   const scaledW = SRC.width * s;
-  const x = Math.min(0, Math.max(1080 - scaledW, 540 - cropAnchorX(scene) * s));
+  const anchor = cropAnchorX(scene) * s; // focus point in scaled coordinates
+  const x = Math.min(0, Math.max(target.width - scaledW, target.width / 2 - anchor));
   return (
     <AbsoluteFill style={{overflow: 'hidden'}}>
       <div
@@ -497,7 +518,7 @@ const ClipScene: React.FC<{scene: Scene}> = ({scene}) => {
 };
 
 const PhoneScene: React.FC<{scene: Scene; layout: Layout}> = ({scene, layout}) => {
-  const w = layout === 'vertical' ? 560 : 380;
+  const w = {wide: 380, vertical: 560, portrait: 500, square: 440}[layout];
   const imgH = Math.round(844 * (w / 390));
   return (
     <AbsoluteFill
@@ -613,10 +634,16 @@ const SlideView: React.FC<{
   // A narrated slide shares the frame with its caption: shift the card content
   // away from the caption band so the two text layers never collide.
   const narrated = Boolean(kind === 'intro' ? intro?.audio : outro?.audio);
-  const clear = narrated ? {[captionPosition === 'top' ? 'paddingTop' : 'paddingBottom']: 250} : {};
-  // Intro-only split layout: text left, screenshot right. Vertical compositions
-  // don't have the width for it, so they always stack.
-  const split = kind === 'intro' && intro?.layout === 'split' && Boolean(intro?.screenshot) && layout !== 'vertical';
+  const CLEAR: Record<Layout, number> = {wide: 250, vertical: 250, portrait: 210, square: 170};
+  const clear = narrated ? {[captionPosition === 'top' ? 'paddingTop' : 'paddingBottom']: CLEAR[layout]} : {};
+  // Intro-only split layout: text left, screenshot right. Only the 1920-wide
+  // canvas has the room for it; every cropped layout stacks.
+  const split = kind === 'intro' && intro?.layout === 'split' && Boolean(intro?.screenshot) && layout === 'wide';
+
+  // Type scales with the canvas: a 1080-wide card needs less, a 1920-wide one more.
+  const TITLE_SIZE: Record<Layout, number> = {wide: 76, vertical: 66, portrait: 62, square: 58};
+  const SUB_SIZE: Record<Layout, number> = {wide: 34, vertical: 34, portrait: 32, square: 30};
+  const CARD_WIDTH: Record<Layout, number> = {wide: 980, vertical: 760, portrait: 700, square: 640};
 
   const screenshotCard =
     kind === 'intro' && intro?.screenshot ? (
@@ -629,7 +656,7 @@ const SlideView: React.FC<{
           overflow: 'hidden',
           border: '1px solid rgba(148,163,184,0.3)',
           boxShadow: '0 40px 90px -30px rgba(0,0,0,0.8)',
-          width: split ? 880 : layout === 'vertical' ? 760 : 980,
+          width: split ? 880 : CARD_WIDTH[layout],
           flexShrink: 0,
         }}
       >
@@ -651,7 +678,7 @@ const SlideView: React.FC<{
       <div
         style={{
           color: '#f8fafc',
-          fontSize: split ? 68 : layout === 'vertical' ? 66 : 76,
+          fontSize: split ? 68 : TITLE_SIZE[layout],
           fontWeight: 700,
           letterSpacing: '-0.02em',
           lineHeight: 1.1,
@@ -661,12 +688,12 @@ const SlideView: React.FC<{
         {title}
       </div>
       {subtitle ? (
-        <div style={{color: '#9aa3b5', fontSize: layout === 'vertical' ? 34 : 34, marginTop: 22}}>
+        <div style={{color: '#9aa3b5', fontSize: SUB_SIZE[layout], marginTop: 22}}>
           {subtitle}
         </div>
       ) : null}
       {kind === 'outro' && outro?.url ? (
-        <div style={{color: brand, fontSize: layout === 'vertical' ? 34 : 32, marginTop: 30, fontWeight: 600}}>
+        <div style={{color: brand, fontSize: SUB_SIZE[layout] - 2, marginTop: 30, fontWeight: 600}}>
           {outro.url}
         </div>
       ) : null}
@@ -720,10 +747,12 @@ const SceneView: React.FC<{
     <AbsoluteFill style={{backgroundColor: '#0f172a'}}>
       {scene.frame === 'phone' ? (
         <PhoneScene scene={scene} layout={layout} />
-      ) : layout === 'vertical' ? (
-        <VerticalCrop scene={scene}>{content}</VerticalCrop>
-      ) : (
+      ) : layout === 'wide' ? (
         content
+      ) : (
+        <Crop scene={scene} layout={layout}>
+          {content}
+        </Crop>
       )}
       {captions ? (
         <Caption

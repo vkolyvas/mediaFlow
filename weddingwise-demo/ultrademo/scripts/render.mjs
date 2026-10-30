@@ -1,6 +1,7 @@
 // Render helper: picks the composition, flags, and output name for a project.
 //
-// Usage: npm run render -- <project> [--vertical] [--gif] [--no-captions] [--stems]
+// Usage: npm run render -- <project> [--vertical] [--portrait] [--square] [--instagram]
+//                                    [--gif] [--no-captions] [--stems]
 //                                    [--caption-theme=outline|pill|bar] [--caption-size=sm|md|lg]
 //                                    [--caption-position=bottom|top] [--caption-highlight=dim|pill|wipe]
 //                                    [--caption-literal-color=#hex]
@@ -8,6 +9,12 @@
 // Default output is the FINALIZED video (captions burned in, narration mixed).
 // Caption look is set per-storyboard (storyboard.caption); the --caption-* flags
 // override it for a single render so you can try styles without re-capturing.
+// Aspect-ratio variants (one capture, every format):
+//   --vertical   1080x1920  9:16 reel, full runtime
+//   --portrait  1080x1350  4:5 Instagram feed, cut to the feed length limit
+//   --square    1080x1080  1:1 Instagram feed, cut to the feed length limit
+//   --instagram             all three of the above
+//
 // Power-user opt-ins for editing before publishing:
 //   --no-captions  finalized video without burned-in captions
 //   --stems        editor-ready bundle in out/<project>-stems/:
@@ -20,10 +27,9 @@ import {existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync
 const args = process.argv.slice(2);
 const project = args.find((a) => !a.startsWith('--'));
 if (!project) {
-  console.error('Usage: npm run render -- <project> [--vertical] [--gif] [--no-captions] [--stems] [--caption-theme=] [--caption-size=] [--caption-position=]');
+  console.error('Usage: npm run render -- <project> [--vertical] [--portrait] [--square] [--instagram] [--gif] [--no-captions] [--stems] [--caption-theme=] [--caption-size=] [--caption-position=]');
   process.exit(1);
 }
-const vertical = args.includes('--vertical');
 const gif = args.includes('--gif');
 const noCaptions = args.includes('--no-captions');
 const stems = args.includes('--stems');
@@ -40,7 +46,13 @@ const captionOverride = {
 };
 const caption = Object.fromEntries(Object.entries(captionOverride).filter(([, v]) => v));
 
-const comp = vertical ? 'DemoVertical' : 'Demo';
+// Aspect-ratio variants. --instagram renders all three.
+const VARIANTS = {vertical: 'DemoVertical', portrait: 'DemoPortrait', square: 'DemoSquare'};
+const wanted = args.includes('--instagram')
+  ? ['vertical', 'portrait', 'square']
+  : ['vertical', 'portrait', 'square'].filter((v) => args.includes(`--${v}`));
+
+const comp = wanted.length ? VARIANTS[wanted[0]] : 'Demo';
 const publicDir = `projects/${project}/assets`;
 const outDir = `projects/${project}/out`;
 
@@ -79,33 +91,93 @@ const archive = (out) => {
   console.log(`archived previous render -> ${dir}/${stamp}-${base}`);
 };
 
-const renderComp = (out, props) => {
+const renderComp = (out, props, composition = comp) => {
   archive(out);
   execFileSync(
     'npx',
-    ['remotion', 'render', 'render/src/index.ts', comp, out,
+    ['remotion', 'render', 'render/src/index.ts', composition, out,
       `--public-dir=${publicDir}`,
       '--timeout=90000',
       `--props=${JSON.stringify(props)}`,
       ...(gif ? ['--codec=gif', '--every-nth-frame=2', '--scale=0.5'] : [])],
     {stdio: 'inherit'},
   );
+  invalidateMix(out);
+};
+
+// The music bed is mixed into the rendered file as a post-process, so a fresh
+// render invalidates the "already mixed" marker for that file (otherwise the
+// next mix would stack a second bed on top of the first).
+const invalidateMix = (out) => {
+  const markerPath = `${outDir}/.mixed.json`;
+  if (!existsSync(markerPath)) return;
+  const marker = JSON.parse(readFileSync(markerPath, 'utf8'));
+  const key = out.split('/').pop();
+  if (!(key in marker)) return;
+  delete marker[key];
+  writeFileSync(markerPath, JSON.stringify(marker, null, 2));
 };
 mkdirSync(outDir, {recursive: true});
 
 const captionProp = Object.keys(caption).length ? {caption} : {};
 
+// Instagram's feed rejects videos longer than 60 s. The feed formats are cut
+// down to a highlight reel instead of being chopped at a fixed timestamp: the
+// intro and the outro (which carries the URL) always survive, and the scenes
+// in between are spread evenly so the cut still reads as a story.
+const FEED_LIMIT = 59.5;
+
+const feedSceneIds = (sb) => {
+  const intro = slideSeconds(sb.intro);
+  const outro = slideSeconds(sb.outro);
+  const budget = FEED_LIMIT - intro - outro;
+  const costs = sb.scenes.map((s) => sceneSeconds(s));
+  const total = costs.reduce((a, b) => a + b, 0);
+  if (total <= budget) return null; // the full story already fits the feed
+  const n = sb.scenes.length;
+  const pick = (k) => {
+    if (k <= 1) return [sb.scenes[Math.floor((n - 1) / 2)].id];
+    const ids = [];
+    for (let i = 0; i < k; i++) ids.push(sb.scenes[Math.round((i * (n - 1)) / (k - 1))].id);
+    return [...new Set(ids)];
+  };
+  const cost = (ids) =>
+    ids.reduce((sum, id) => sum + costs[sb.scenes.findIndex((s) => s.id === id)], 0);
+  const ids = pick(Math.max(1, Math.floor(budget / (total / n))));
+  while (ids.length > 1 && intro + outro + cost(ids) > FEED_LIMIT) ids.pop();
+  return ids;
+};
+
 if (!stems) {
-  const out = `${outDir}/${project}${vertical ? '-vertical' : ''}${noCaptions ? '-nocaptions' : ''}.${gif ? 'gif' : 'mp4'}`;
-  renderComp(out, {storyboard: null, captions: !noCaptions, ...captionProp});
-  console.log(`\nrendered ${out}`);
+  if (!wanted.length) {
+    const out = `${outDir}/${project}${noCaptions ? '-nocaptions' : ''}.${gif ? 'gif' : 'mp4'}`;
+    renderComp(out, {storyboard: null, captions: !noCaptions, ...captionProp});
+    console.log(`\nrendered ${out}`);
+  } else {
+    const sb = JSON.parse(readFileSync(`${publicDir}/storyboard.json`, 'utf8'));
+    const feed = feedSceneIds(sb);
+    for (const variant of wanted) {
+      const out = `${outDir}/${project}-${variant}${noCaptions ? '-nocaptions' : ''}.mp4`;
+      // The reel keeps the full runtime; the feed formats use the cut.
+      const props = {
+        storyboard: null,
+        captions: !noCaptions,
+        ...captionProp,
+        ...(variant !== 'vertical' && feed ? {sceneIds: feed} : {}),
+      };
+      renderComp(out, props, VARIANTS[variant]);
+      console.log(
+        `\nrendered ${out}${feed && variant !== 'vertical' ? `  (feed cut: ${feed.length}/${sb.scenes.length} scenes kept)` : ''}`,
+      );
+    }
+  }
 } else {
   const dir = `${outDir}/stems`;
   mkdirSync(dir, {recursive: true});
   const sb = JSON.parse(readFileSync(`${publicDir}/storyboard.json`, 'utf8'));
 
   // the finalized video is ALWAYS produced, stems are additional
-  const finalOut = `${outDir}/${project}${vertical ? '-vertical' : ''}.mp4`;
+  const finalOut = `${outDir}/${project}.mp4`;
   renderComp(finalOut, {storyboard: null, ...captionProp});
   console.log(`rendered ${finalOut} (finalized)`);
 

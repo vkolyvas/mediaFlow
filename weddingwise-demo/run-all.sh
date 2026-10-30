@@ -6,6 +6,8 @@
 #   ./run-all.sh tts          # re-narrate (cached: only changed lines re-synthesise)
 #   ./run-all.sh render       # re-render from the existing storyboards
 #   ./run-all.sh render-vars  # render the overview's vertical / GIF / stems variants
+#   ./run-all.sh social       # render every Instagram/Shorts aspect ratio
+#   ./run-all.sh music        # (re)mix the ragtime bed under the finished videos
 #
 # Projects are named <app>-<topic>-<YYYY-MM-DD-HHMM>; retakes reuse the same
 # folder, which keeps the TTS cache warm.
@@ -13,6 +15,7 @@
 set -euo pipefail
 
 WORKSPACE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/ultrademo"
+MUSIC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/music"
 APP_REPO="${APP_REPO:-/home/onchaine3r/auth-weddingwise}"
 
 PROJECTS=(
@@ -64,13 +67,33 @@ run_render_variants() {
   npm run render -- "$p" --stems
 }
 
+# Every Instagram/Shorts aspect ratio for every project: 9:16 reel (full
+# runtime) plus the 4:5 and 1:1 feed cuts (Instagram caps feed posts at 60 s,
+# so those are rendered as a highlight reel).
+run_render_social() {
+  for p in "${PROJECTS[@]}"; do
+    echo "== render (social) $p =="
+    npm run render -- "$p" --instagram
+  done
+}
+
+# The ragtime bed is mixed into the finished MP4 (video copied, audio
+# re-encoded), so it runs after the renders.
+run_music() {
+  echo "== music =="
+  node "$MUSIC/fetch-music.mjs"
+  node "$MUSIC/mix.mjs" "${PROJECTS[@]}"
+}
+
 case "$STAGE" in
   capture)     seed_demo_data; run_capture ;;
   tts)         run_tts ;;
   render)      run_render ;;
   render-vars) run_render_variants ;;
-  all)         seed_demo_data; run_capture; run_tts; run_render ;;
-  *) echo "usage: $0 [all|capture|tts|render|render-vars]"; exit 1 ;;
+  social)      run_render_social ;;
+  music)       run_music ;;
+  all)         seed_demo_data; run_capture; run_tts; run_render; run_render_social; run_music ;;
+  *) echo "usage: $0 [all|capture|tts|render|render-vars|social|music]"; exit 1 ;;
 esac
 
 echo
