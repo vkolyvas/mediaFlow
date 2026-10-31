@@ -86,11 +86,19 @@ export type Scene = {
   audioDuration?: number; // seconds, written by the tts step
   words?: WordTiming[]; // per-word timings from ElevenLabs (karaoke captions)
   durationHint?: number; // seconds, fallback when no audio
-  // Where the site's content sits in this frame, measured from the capture by
-  // lib/vertical-frames.mjs. The 9:16 vertical pushes its view toward it.
-  verticalFrame?: {target: number; subject: number | null; window: [number, number]};
-  // The blurred copy of the frame that sits behind the screen strip.
-  verticalBackdrop?: string;
+  // The 9:16 window cut out of the capture offline (lib/vertical-crops.mjs).
+  // The asset is already 1080x1920, so the vertical draws it 1:1 - no
+  // transform, no backdrop.
+  verticalCut?: {
+    cropX: number; // css px, left edge of the window in the 1920-wide capture
+    cropW: number; // css px, width of the window
+    cropH: number; // css px, height of the window
+    asset: string; // path under public/ - the cut clip (or the cut still)
+    still: string; // path under public/ - the cut end-state still
+    isVideo: boolean;
+    push: number; // the baked push-in, as a share of the window
+    duration: number; // seconds the push-in spans
+  };
 };
 
 export type Storyboard = {
@@ -530,106 +538,204 @@ const ClipScene: React.FC<{scene: Scene}> = ({scene}) => {
   );
 };
 
-// The 9:16 vertical shows the captured screen fitted to the frame width, so the
-// whole page is visible, then pushes in toward the part of the page the scene
-// is about. A fixed crop used to slice the page at an arbitrary column - the
-// app renders its UI in a narrow column inside a 1920px canvas, so most of
-// those slices landed on empty gutter.
-const VERT_FIT = 1080 / 1920;   // screen scaled to the frame width
-const VERT_ZOOM_MAX = 2.25;     // end of the push-in (853 CSS px visible)
-const VERT_TOP = 96;            // where the screen block starts
-const VERT_BOTTOM = 1560;       // the caption band starts below this
-const VERT_PUSH = 0.55;         // share of the clip the push-in takes
+// The 9:16 vertical is NOT cropped in the renderer. lib/vertical-crops.mjs cuts
+// the 9:16 window out of the capture offline and scales it to 1080x1920, so
+// the frame is drawn 1:1. That matters: the reel used to be a flat grey slab,
+// because the recorder had padded the capture to 3840x2160 with grey and the
+// crop window was aimed at the padding.
+const VERT_W = 1080;
+const VERT_H = 1920;
 
-// Where the view points: the measured content window, aimed at the element the
-// scene clicked when that element is inside the window.
-const verticalTarget = (scene: Scene): number => {
-  const measured = scene.verticalFrame?.target;
-  if (typeof measured === 'number') return measured;
-  const clicks = (scene.events ?? []).filter((e) => e.type === 'click');
-  const xs = (clicks.length ? clicks : scene.events ?? [])
-    .map((e) => e.x)
-    .sort((a, b) => a - b);
-  return xs.length ? xs[Math.floor(xs.length / 2)] : SRC.width / 2;
+// Where the cut window sits at clip-time t, in capture CSS px. The offline cut
+// animates a slow push-in by zooming into the window, so the cursor follows
+// the same maths to stay on the element it points at.
+const cutWindow = (cut: NonNullable<Scene['verticalCut']>, t: number) => {
+  const d = cut.duration > 1 ? cut.duration : 0;
+  const p = d ? Math.min(1, Math.max(0, t / d)) : 0;
+  const z = 1 + cut.push * p;
+  const w = cut.cropW / z;
+  const h = cut.cropH / z;
+  return {
+    x: cut.cropX + cut.cropW / 2 - w / 2,
+    y: cut.cropH / 2 - h / 2,
+    w,
+    h,
+  };
 };
 
-const VerticalScene: React.FC<{scene: Scene; children: React.ReactNode}> = ({scene, children}) => {
+// A soft gradient at the bottom so the caption always has a dark base to sit
+// on, whatever the page looks like underneath it.
+const VerticalScrim: React.FC = () => (
+  <div
+    style={{
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: 560,
+      background:
+        'linear-gradient(to bottom, rgba(2,6,23,0) 0%, rgba(2,6,23,0.5) 55%, rgba(2,6,23,0.88) 100%)',
+      pointerEvents: 'none',
+    }}
+  />
+);
+
+const VerticalScene: React.FC<{scene: Scene; prev: Scene | null}> = ({scene, prev}) => {
   const frame = useCurrentFrame();
+  const cut = scene.verticalCut;
   const rate = clipRate(scene);
-  const clipFrames = scene.clipDuration ? Math.round((scene.clipDuration / rate) * FPS) : 0;
+  const clipDuration = scene.clipDuration ?? 0;
+  const clipFrames = clipDuration ? Math.round((clipDuration / rate) * FPS) : 0;
+  const t = (frame / FPS) * rate; // clip time, accounting for auto-fit speed-up
   const total = sceneFrames(scene);
-  // The push tracks the clip; once the clip is over the view holds where it is.
-  const progress = clipFrames
-    ? Math.min(1, frame / Math.max(1, clipFrames))
-    : Math.min(1, frame / Math.max(1, total - 1));
-  const ramp = Math.min(1, progress / VERT_PUSH);
-  const k = 1 + (VERT_ZOOM_MAX - 1) * (1 - (1 - ramp) * (1 - ramp));
-  const s = VERT_FIT * k;
 
-  const target = verticalTarget(scene);
-  // Centre the target, but never slide past the edge of the page - that would
-  // leave a gap where the screen should be.
-  const tx = Math.min(0, Math.max(1080 - 1080 * k, 540 - target * s));
+  // Without a cut asset (the offline step did not run) fall back to the whole
+  // capture, covering the frame.
+  if (!cut) {
+    return (
+      <AbsoluteFill style={{backgroundColor: '#0f172a', overflow: 'hidden'}}>
+        <Img
+          src={staticFile(scene.screenshot)}
+          style={{width: '100%', height: '100%', objectFit: 'cover'}}
+        />
+        <VerticalScrim />
+      </AbsoluteFill>
+    );
+  }
 
-  const contentH = SRC.height * s;
-  const band = VERT_BOTTOM - VERT_TOP;
-  const h = Math.min(band, contentH);
+  const win = cutWindow(cut, Math.min(t, clipDuration));
+  const mag = VERT_W / win.w; // output px per capture css px
+  const toFrame = (x: number, y: number, w = win) => ({
+    x: (x - w.x) * (VERT_W / w.w),
+    y: (y - w.y) * (VERT_H / w.h),
+  });
+  // A click can land outside the cut window - the scene clicked a nav item
+  // while the window sits on the content - and then there is nothing in frame
+  // to point at.
+  const onScreen = (p: {x: number; y: number}) =>
+    p.x >= -40 && p.x <= VERT_W + 40 && p.y >= -40 && p.y <= VERT_H + 40;
+
+  const playing = cut.isVideo && frame < clipFrames;
+  const pos = cut.isVideo
+    ? cursorAt(scene.events ?? [], Math.min(t, clipDuration))
+    : null;
+  const clicks = (scene.events ?? []).filter((e) => e.type === 'click');
+
+  // A still scene gets the same cursor travel as the wide render: from where
+  // the pointer was left to the element the scene acted on.
+  const stillTarget = scene.action ?? null;
+  const cursorFrom = lastPoint(prev) ?? {x: 960, y: 620};
+  const travel = interpolate(frame, [Math.round(total * 0.12), Math.round(total * 0.42)], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+    easing: Easing.inOut(Easing.quad),
+  });
+  const stillCursor = stillTarget
+    ? {
+        x: cursorFrom.x + (stillTarget.x - cursorFrom.x) * travel,
+        y: cursorFrom.y + (stillTarget.y - cursorFrom.y) * travel,
+      }
+    : null;
+  const clickAt = Math.round(total * 0.5);
+  const stillRipple = interpolate(frame, [clickAt, clickAt + 14], [0, 1], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
+  const showStillRipple = stillTarget?.type === 'click' && stillRipple > 0 && stillRipple < 1;
+
+  // A gentle push on the still so it is not a frozen picture for five seconds.
+  const stillScale = interpolate(frame, [Math.round(total * 0.18), Math.round(total * 0.62)], [1, 1.05], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+    easing: Easing.inOut(Easing.cubic),
+  });
 
   return (
     <AbsoluteFill style={{backgroundColor: '#0f172a', overflow: 'hidden'}}>
-      {/* The 9:16 frame is much taller than the screen strip, so the space
-          around the strip is filled with a blurred copy of the same frame -
-          the reel reads as one image instead of a screenshot on a black wall.
-          The blur is baked into the asset (see lib/vertical-frames.mjs): a
-          CSS blur filter at this size costs gigabytes in the compositor and
-          stalls the render. */}
-      {scene.verticalBackdrop ? (
+      {playing ? (
+        <OffthreadVideo
+          muted
+          playbackRate={rate}
+          src={staticFile(cut.asset)}
+          style={{width: VERT_W, height: VERT_H}}
+        />
+      ) : (
         <Img
-          src={staticFile(scene.verticalBackdrop)}
+          src={staticFile(cut.still)}
           style={{
-            position: 'absolute',
-            left: -20,
-            top: 0,
-            width: 280,
-            height: 480,
-            transform: 'scale(4)',
-            transformOrigin: '0 0',
+            width: VERT_W,
+            height: VERT_H,
+            objectFit: 'cover',
+            transform: `scale(${stillScale})`,
+            transformOrigin: '50% 50%',
           }}
         />
-      ) : null}
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: VERT_TOP,
-          height: h,
-          overflow: 'hidden',
-          boxShadow: '0 24px 60px -20px rgba(0,0,0,0.85)',
-        }}
-      >
+      )}
+      {clicks.map((c, i) => {
+        const start = Math.round((c.t / rate) * FPS);
+        const p = interpolate(frame, [start, start + 14], [0, 1], {
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        });
+        if (p <= 0 || p >= 1) return null;
+        // the window at the moment of the click, not the window right now
+        const cw = cutWindow(cut, Math.min(c.t, clipDuration));
+        const cp = toFrame(c.x, c.y, cw);
+        if (!onScreen(cp)) return null;
+        const cm = VERT_W / cw.w;
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: cp.x - 40 * cm * p,
+              top: cp.y - 40 * cm * p,
+              width: 80 * cm * p,
+              height: 80 * cm * p,
+              borderRadius: '50%',
+              border: `${3 * cm}px solid rgba(255,255,255,0.9)`,
+              opacity: 1 - p,
+            }}
+          />
+        );
+      })}
+      {showStillRipple && stillCursor && !cut.isVideo && onScreen(toFrame(stillCursor.x, stillCursor.y)) ? (
         <div
           style={{
             position: 'absolute',
-            width: SRC.width,
-            height: SRC.height,
-            transform: `translateX(${tx}px) scale(${s})`,
-            transformOrigin: '0 0',
+            left: toFrame(stillCursor.x, stillCursor.y).x - 40 * mag * stillRipple,
+            top: toFrame(stillCursor.x, stillCursor.y).y - 40 * mag * stillRipple,
+            width: 80 * mag * stillRipple,
+            height: 80 * mag * stillRipple,
+            borderRadius: '50%',
+            border: `${3 * mag}px solid rgba(255,255,255,0.9)`,
+            opacity: 1 - stillRipple,
+          }}
+        />
+      ) : null}
+      {pos && onScreen(toFrame(pos.x, pos.y)) ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: toFrame(pos.x, pos.y).x,
+            top: toFrame(pos.x, pos.y).y,
           }}
         >
-          {children}
+          <Cursor scale={mag} />
         </div>
-      </div>
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          top: VERT_TOP + h - 1,
-          height: 2,
-          background: 'rgba(148,163,184,0.22)',
-        }}
-      />
+      ) : null}
+      {!cut.isVideo && stillCursor && onScreen(toFrame(stillCursor.x, stillCursor.y)) ? (
+        <div
+          style={{
+            position: 'absolute',
+            left: toFrame(stillCursor.x, stillCursor.y).x,
+            top: toFrame(stillCursor.x, stillCursor.y).y,
+          }}
+        >
+          <Cursor scale={mag} />
+        </div>
+      ) : null}
+      <VerticalScrim />
     </AbsoluteFill>
   );
 };
@@ -880,7 +986,7 @@ const SceneView: React.FC<{
       ) : layout === 'wide' ? (
         content
       ) : layout === 'vertical' ? (
-        <VerticalScene scene={scene}>{content}</VerticalScene>
+        <VerticalScene scene={scene} prev={prev} />
       ) : (
         <Crop scene={scene} layout={layout}>
           {content}

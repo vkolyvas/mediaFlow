@@ -25,22 +25,43 @@ const loadStoryboard = async ({props}: {props: Props}) => {
   return {durationInFrames: totalFrames(storyboard), props: {...props, storyboard}};
 };
 
-// Where each scene's content sits in the frame, measured from the capture by
-// lib/vertical-frames.mjs. The 9:16 vertical pushes its view toward it.
+// The 9:16 window cut out of each capture, prepared by lib/vertical-crops.mjs.
+// The renderer draws these 1:1 - the crop happens offline, in ffmpeg.
 const attachVerticalFrames = async (storyboard: Storyboard): Promise<Storyboard> => {
   const measured: Record<
     string,
-    {target: number; subject: number | null; window: [number, number]; backdrop?: string}
+    {
+      cropX: number;
+      cropW: number;
+      cropH: number;
+      asset?: string;
+      still?: string;
+      isVideo?: boolean;
+      push?: number;
+      duration?: number;
+    }
   > = await fetch(staticFile('vertical-frames.json'))
     .then((r) => (r.ok ? r.json() : {}))
     .catch(() => ({}));
   return {
     ...storyboard,
-    scenes: storyboard.scenes.map((s) =>
-      measured[s.id]
-        ? {...s, verticalFrame: measured[s.id], verticalBackdrop: measured[s.id].backdrop}
-        : s,
-    ),
+    scenes: storyboard.scenes.map((s) => {
+      const m = measured[s.id];
+      if (!m || !m.asset || !m.still) return s;
+      return {
+        ...s,
+        verticalCut: {
+          cropX: m.cropX,
+          cropW: m.cropW,
+          cropH: m.cropH,
+          asset: m.asset,
+          still: m.still,
+          isVideo: Boolean(m.isVideo),
+          push: m.push ?? 0,
+          duration: m.duration ?? 0,
+        },
+      };
+    }),
   };
 };
 

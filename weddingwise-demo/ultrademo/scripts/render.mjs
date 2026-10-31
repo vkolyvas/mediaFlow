@@ -207,8 +207,8 @@ const feedSceneIds = (sb) => {
 
 if (!stems) {
   // Measure where each scene's content sits in the frame before rendering: the
-  // 9:16 vertical pushes its view toward that spot. Cheap (one ffmpeg pass per
-  // scene) and it keeps the vertical from slicing the page at a blank column.
+  // 9:16 window is aimed at that spot. Cheap (one ffmpeg pass per scene) and
+  // it keeps the vertical from slicing the page at a blank column.
   try {
     execFileSync('node', ['lib/vertical-frames.mjs', project], {stdio: 'inherit'});
   } catch (err) {
@@ -223,6 +223,16 @@ if (!stems) {
     const feed = feedSceneIds(sb);
     for (const variant of wanted) {
       const out = `${outDir}/${project}-${variant}${noCaptions ? '-nocaptions' : ''}.mp4`;
+      // The 9:16 window is cut out of the capture offline, in ffmpeg. The
+      // recorder pads the frame with grey and the crop window was aimed at the
+      // padding, which is what left the old reel as a flat grey slab.
+      if (variant === 'vertical') {
+        try {
+          execFileSync('node', ['lib/vertical-crops.mjs', project], {stdio: 'inherit'});
+        } catch (err) {
+          console.warn(`vertical-crops: cutting failed (${err.message}) - the vertical falls back to the full frame`);
+        }
+      }
       // The reel keeps the full runtime; the feed formats use the cut.
       const props = {
         storyboard: null,

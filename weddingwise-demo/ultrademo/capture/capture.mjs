@@ -18,10 +18,13 @@ import {pathToFileURL} from 'node:url';
 const execFileP = promisify(execFile);
 
 const VIEWPORT = {width: 1920, height: 1080};
-// Clips are recorded at 2x. The 9:16 render crops a 607px-wide window out of
-// the 1920x1080 frame and blows it up to 1080 - a 1x recording would be
-// upscaled and read as out of focus. At 2x the crop samples real pixels.
-const VIDEO_SIZE = {width: 3840, height: 2160};
+// The recording size has to match the viewport. Chromium's screencast captures
+// at CSS resolution (deviceScaleFactor does not apply to it) and Playwright
+// pads the frame to `recordVideo.size` instead of scaling it - so asking for
+// 3840x2160 did not give a 2x recording, it gave the 1920x1080 page in the
+// top-left corner of a mostly grey canvas. That grey is what the 9:16 reel
+// showed instead of the site.
+const VIDEO_SIZE = VIEWPORT;
 const PHONE_VIEWPORT = {width: 390, height: 844};
 
 const project = process.argv[2];

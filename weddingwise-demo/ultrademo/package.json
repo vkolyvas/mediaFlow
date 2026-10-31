@@ -11,6 +11,7 @@
     "capture": "node capture/capture.mjs",
     "tts": "node --env-file-if-exists=.env tts/tts.mjs",
     "render": "node scripts/render.mjs",
+    "trim": "node lib/trim-clips.mjs",
     "studio": "remotion studio render/src/index.ts",
     "login": "node scripts/login.mjs"
   },
