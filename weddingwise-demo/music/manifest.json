@@ -1,0 +1,77 @@
+{
+  "_comment": [
+    "Background music beds for the WeddingWise demo videos.",
+    "Every track is a public-domain ragtime piano recording from Wikimedia Commons.",
+    "Each video gets a DIFFERENT piece, mixed very low under the narration.",
+    "Run ./fetch-music.sh to download the source files, then ./mix.sh to mix them in."
+  ],
+  "defaults": {
+    "bedGainDb": -10,
+    "duckThreshold": 0.05,
+    "duckRatio": 8,
+    "duckAttackMs": 10,
+    "duckReleaseMs": 400,
+    "fadeInSec": 2,
+    "fadeOutSec": 3,
+    "targetLufs": -20
+  },
+  "tracks": [
+    {
+      "id": "skedaddle",
+      "title": "Ragtime Skedaddle",
+      "artist": "George Rosey",
+      "year": 1899,
+      "file": "skedaddle.oga",
+      "source": "https://upload.wikimedia.org/wikipedia/commons/f/fe/%22Ragtime_Skedaddle%22_%281899%29%2C_by_George_Rosey.oga",
+      "commons": "https://commons.wikimedia.org/wiki/File:%22Ragtime_Skedaddle%22_(1899),_by_George_Rosey.oga",
+      "licence": "Public domain"
+    },
+    {
+      "id": "that-rag",
+      "title": "That Rag",
+      "artist": "Ted Browne",
+      "year": 1907,
+      "file": "that-rag.opus",
+      "source": "https://upload.wikimedia.org/wikipedia/commons/f/fe/That_Rag_by_Ted_Browne_%281907%2C_Ragtime_piano_solo%29.opus",
+      "commons": "https://commons.wikimedia.org/wiki/File:That_Rag_by_Ted_Browne_(1907,_Ragtime_piano_solo).opus",
+      "licence": "Public domain"
+    },
+    {
+      "id": "oyster",
+      "title": "The Oyster Rag",
+      "artist": "Tom Lyle",
+      "year": 1910,
+      "file": "oyster.opus",
+      "source": "https://upload.wikimedia.org/wikipedia/commons/3/3a/%22The_Oyster_Rag%22%2C_by_Tom_Lyle_%281910%2C_Ragtime_piano%29.opus",
+      "commons": "https://commons.wikimedia.org/wiki/File:%22The_Oyster_Rag%22,_by_Tom_Lyle_(1910,_Ragtime_piano).opus",
+      "licence": "Public domain"
+    },
+    {
+      "id": "oriole",
+      "title": "Ragtime Oriole",
+      "artist": "James Scott",
+      "year": 1911,
+      "file": "oriole.ogg",
+      "source": "https://upload.wikimedia.org/wikipedia/commons/3/39/James_Scott_-_Ragtime_Oriole_%281911%29.ogg",
+      "commons": "https://commons.wikimedia.org/wiki/File:James_Scott_-_Ragtime_Oriole_(1911).ogg",
+      "licence": "Public domain"
+    },
+    {
+      "id": "firefly",
+      "title": "Firefly Rag",
+      "artist": "Joseph F. Lamb",
+      "year": null,
+      "file": "firefly.opus",
+      "source": "https://upload.wikimedia.org/wikipedia/commons/8/8d/Joseph_F._Lamb_-_%22Firefly_Rag%22_%28Ragtime_Piano%29.opus",
+      "commons": "https://commons.wikimedia.org/wiki/File:Joseph_F._Lamb_-_%22Firefly_Rag%22_(Ragtime_Piano).opus",
+      "licence": "Public domain"
+    }
+  ],
+  "projects": {
+    "weddingwise-public-2026-10-30": "skedaddle",
+    "weddingwise-overview-2026-10-30": "that-rag",
+    "weddingwise-couples-2026-10-30": "oyster",
+    "weddingwise-vendors-2026-10-30": "oriole",
+    "weddingwise-planners-2026-10-30": "firefly"
+  }
+}

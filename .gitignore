@@ -26,3 +26,11 @@ out/
 # OS
 .DS_Store
 Thumbs.db
+
+# WeddingWise demo video pipeline (weddingwise-demo/)
+# The scout tool symlinks ultrademo/node_modules for convenience.
+weddingwise-demo/scout/node_modules
+weddingwise-demo/ultrademo/.profiles/
+# The ragtime beds are downloaded from Wikimedia Commons on demand
+# (weddingwise-demo/music/fetch-music.mjs) - no need to carry ~20MB of audio.
+weddingwise-demo/music/src/
