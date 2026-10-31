@@ -86,6 +86,11 @@ export type Scene = {
   audioDuration?: number; // seconds, written by the tts step
   words?: WordTiming[]; // per-word timings from ElevenLabs (karaoke captions)
   durationHint?: number; // seconds, fallback when no audio
+  // Where the site's content sits in this frame, measured from the capture by
+  // lib/vertical-frames.mjs. The 9:16 vertical pushes its view toward it.
+  verticalFrame?: {target: number; subject: number | null; window: [number, number]};
+  // The blurred copy of the frame that sits behind the screen strip.
+  verticalBackdrop?: string;
 };
 
 export type Storyboard = {
@@ -422,11 +427,19 @@ const lastPoint = (s: Scene | null): {x: number; y: number} | null => {
 };
 
 // Horizontal anchor for the 9:16 crop: the scene's point of interest.
+// For a recorded clip the point of interest is wherever the pointer was
+// working, so the crop follows the cursor instead of the frame centre. The
+// median of the whole cursor track is used (not just the clicks): a single
+// click on a far-right control would otherwise drag the whole clip to the
+// edge of the frame.
 const cropAnchorX = (scene: Scene): number => {
   if (scene.focus) return scene.focus.x;
   if (scene.action) return scene.action.x;
-  const clicks = (scene.events ?? []).filter((e) => e.type === 'click');
-  if (clicks.length) return clicks[Math.floor(clicks.length / 2)].x;
+  const events = scene.events ?? [];
+  if (events.length) {
+    const xs = events.map((e) => e.x).sort((a, b) => a - b);
+    return xs[Math.floor(xs.length / 2)];
+  }
   return SRC.width / 2;
 };
 
@@ -517,6 +530,110 @@ const ClipScene: React.FC<{scene: Scene}> = ({scene}) => {
   );
 };
 
+// The 9:16 vertical shows the captured screen fitted to the frame width, so the
+// whole page is visible, then pushes in toward the part of the page the scene
+// is about. A fixed crop used to slice the page at an arbitrary column - the
+// app renders its UI in a narrow column inside a 1920px canvas, so most of
+// those slices landed on empty gutter.
+const VERT_FIT = 1080 / 1920;   // screen scaled to the frame width
+const VERT_ZOOM_MAX = 2.25;     // end of the push-in (853 CSS px visible)
+const VERT_TOP = 96;            // where the screen block starts
+const VERT_BOTTOM = 1560;       // the caption band starts below this
+const VERT_PUSH = 0.55;         // share of the clip the push-in takes
+
+// Where the view points: the measured content window, aimed at the element the
+// scene clicked when that element is inside the window.
+const verticalTarget = (scene: Scene): number => {
+  const measured = scene.verticalFrame?.target;
+  if (typeof measured === 'number') return measured;
+  const clicks = (scene.events ?? []).filter((e) => e.type === 'click');
+  const xs = (clicks.length ? clicks : scene.events ?? [])
+    .map((e) => e.x)
+    .sort((a, b) => a - b);
+  return xs.length ? xs[Math.floor(xs.length / 2)] : SRC.width / 2;
+};
+
+const VerticalScene: React.FC<{scene: Scene; children: React.ReactNode}> = ({scene, children}) => {
+  const frame = useCurrentFrame();
+  const rate = clipRate(scene);
+  const clipFrames = scene.clipDuration ? Math.round((scene.clipDuration / rate) * FPS) : 0;
+  const total = sceneFrames(scene);
+  // The push tracks the clip; once the clip is over the view holds where it is.
+  const progress = clipFrames
+    ? Math.min(1, frame / Math.max(1, clipFrames))
+    : Math.min(1, frame / Math.max(1, total - 1));
+  const ramp = Math.min(1, progress / VERT_PUSH);
+  const k = 1 + (VERT_ZOOM_MAX - 1) * (1 - (1 - ramp) * (1 - ramp));
+  const s = VERT_FIT * k;
+
+  const target = verticalTarget(scene);
+  // Centre the target, but never slide past the edge of the page - that would
+  // leave a gap where the screen should be.
+  const tx = Math.min(0, Math.max(1080 - 1080 * k, 540 - target * s));
+
+  const contentH = SRC.height * s;
+  const band = VERT_BOTTOM - VERT_TOP;
+  const h = Math.min(band, contentH);
+
+  return (
+    <AbsoluteFill style={{backgroundColor: '#0f172a', overflow: 'hidden'}}>
+      {/* The 9:16 frame is much taller than the screen strip, so the space
+          around the strip is filled with a blurred copy of the same frame -
+          the reel reads as one image instead of a screenshot on a black wall.
+          The blur is baked into the asset (see lib/vertical-frames.mjs): a
+          CSS blur filter at this size costs gigabytes in the compositor and
+          stalls the render. */}
+      {scene.verticalBackdrop ? (
+        <Img
+          src={staticFile(scene.verticalBackdrop)}
+          style={{
+            position: 'absolute',
+            left: -20,
+            top: 0,
+            width: 280,
+            height: 480,
+            transform: 'scale(4)',
+            transformOrigin: '0 0',
+          }}
+        />
+      ) : null}
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: VERT_TOP,
+          height: h,
+          overflow: 'hidden',
+          boxShadow: '0 24px 60px -20px rgba(0,0,0,0.85)',
+        }}
+      >
+        <div
+          style={{
+            position: 'absolute',
+            width: SRC.width,
+            height: SRC.height,
+            transform: `translateX(${tx}px) scale(${s})`,
+            transformOrigin: '0 0',
+          }}
+        >
+          {children}
+        </div>
+      </div>
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: VERT_TOP + h - 1,
+          height: 2,
+          background: 'rgba(148,163,184,0.22)',
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
+
 const PhoneScene: React.FC<{scene: Scene; layout: Layout}> = ({scene, layout}) => {
   const w = {wide: 380, vertical: 560, portrait: 500, square: 440}[layout];
   const imgH = Math.round(844 * (w / 390));
@@ -546,15 +663,24 @@ const PhoneScene: React.FC<{scene: Scene; layout: Layout}> = ({scene, layout}) =
   );
 };
 
-const StillScene: React.FC<{scene: Scene; prev: Scene | null}> = ({scene, prev}) => {
+const StillScene: React.FC<{scene: Scene; prev: Scene | null; layout: Layout; kenBurns?: boolean}> = ({
+  scene,
+  prev,
+  layout,
+  kenBurns = true,
+}) => {
   const frame = useCurrentFrame();
   const total = sceneFrames(scene);
 
   const focus = scene.focus ?? (scene.action ? {x: scene.action.x, y: scene.action.y} : null);
-  const zoom = focus?.zoom ?? 1.35;
+  // A cropped layout already magnifies the source (the 9:16 crop is 1.78x), so
+  // the Ken Burns push is damped there - otherwise the pixels are scaled twice
+  // and the frame reads as out of focus.
+  const zoomRaw = focus?.zoom ?? 1.35;
+  const zoom = layout === 'wide' ? zoomRaw : 1 + (zoomRaw - 1) * 0.5;
 
   // Ken Burns: settle in at 1.0, then ease toward the focus point
-  const scale = focus
+  const scale = focus && kenBurns
     ? interpolate(frame, [Math.round(total * 0.18), Math.round(total * 0.62)], [1, zoom], {
         extrapolateLeft: 'clamp',
         extrapolateRight: 'clamp',
@@ -738,7 +864,11 @@ const SceneView: React.FC<{
   brand: string;
 }> = ({scene, prev, layout, captions, audio, captionStyle, brand}) => {
   const content =
-    scene.media === 'clip' ? <ClipScene scene={scene} /> : <StillScene scene={scene} prev={prev} />;
+    scene.media === 'clip' ? (
+      <ClipScene scene={scene} />
+    ) : (
+      <StillScene scene={scene} prev={prev} layout={layout} kenBurns={layout !== 'vertical'} />
+    );
 
   // Hard cut between scenes (no per-scene fade) - the composition-level
   // fade-from-black / fade-to-black tops and tails the whole video, so scenes
@@ -749,6 +879,8 @@ const SceneView: React.FC<{
         <PhoneScene scene={scene} layout={layout} />
       ) : layout === 'wide' ? (
         content
+      ) : layout === 'vertical' ? (
+        <VerticalScene scene={scene}>{content}</VerticalScene>
       ) : (
         <Crop scene={scene} layout={layout}>
           {content}

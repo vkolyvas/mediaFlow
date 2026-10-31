@@ -124,3 +124,72 @@ export async function goTo(page, url, settleMs = 2500) {
   await page.waitForLoadState('networkidle', {timeout: 20_000}).catch(() => {});
   await page.waitForTimeout(settleMs);
 }
+
+// Walk the pointer through the visible controls of a page. A recorded clip
+// where the mouse never moves reads as a slideshow; hovering the real UI
+// (cards, list rows, chart segments) reads as someone using the product.
+//
+// The picks are spread across the viewport instead of taken from the top of
+// the DOM, so the pointer travels instead of hopping between neighbours.
+export async function hoverControls(page, rec, opts = {}) {
+  const {
+    selector = 'a, button, [role="button"]',
+    count = 4,
+    pause = 700,
+    top = 90,
+    bottom = 1000,
+    left = 8,
+    right = 1912,
+    minWidth = 28,
+  } = opts;
+  const pts = await page.evaluate(
+    ({selector, count, top, bottom, left, right, minWidth}) => {
+      const out = [];
+      for (const el of document.querySelectorAll(selector)) {
+        const r = el.getBoundingClientRect();
+        const st = getComputedStyle(el);
+        if (st.visibility === 'hidden' || st.display === 'none' || st.opacity === '0') continue;
+        if (r.width < minWidth || r.height < 10) continue;
+        if (r.top < top || r.bottom > bottom || r.left < left || r.right > right) continue;
+        out.push({x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2)});
+      }
+      if (out.length <= count) return out;
+      if (count === 1) return [out[Math.floor((out.length - 1) / 2)]];
+      const picked = [];
+      for (let i = 0; i < count; i++) {
+        picked.push(out[Math.round((i * (out.length - 1)) / (count - 1))]);
+      }
+      return picked;
+    },
+    {selector, count, top, bottom, left, right, minWidth},
+  );
+  for (const p of pts) {
+    await rec.hoverPoint(p);
+    await rec.pause(pause);
+  }
+  return pts.length;
+}
+
+// Scroll down in steps, letting the page settle between them.
+export async function scrollThrough(page, rec, {steps = 2, dy = 380, pause = 500} = {}) {
+  for (let i = 0; i < steps; i++) {
+    await rec.scroll(dy);
+    await rec.pause(pause);
+  }
+}
+
+// Keep the pointer alive for a few seconds: small drifts around where it
+// already is. A clip shorter than its narration would otherwise freeze on
+// the last frame for the rest of the scene.
+export async function idlePointer(page, rec, seconds = 4) {
+  const base = rec.position();
+  const steps = Math.max(1, Math.round(seconds / 1.3));
+  for (let i = 0; i < steps; i++) {
+    const a = (i / steps) * Math.PI * 2;
+    await rec.hoverPoint({
+      x: Math.round(base.x + Math.cos(a) * 80),
+      y: Math.round(base.y + Math.sin(a) * 55),
+    });
+    await rec.pause(700);
+  }
+}

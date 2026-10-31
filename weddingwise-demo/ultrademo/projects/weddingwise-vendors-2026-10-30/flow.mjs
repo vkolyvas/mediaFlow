@@ -5,8 +5,12 @@
 // Photography"). The tour covers the vendor workspace dashboard, the lead
 // pipeline, the incoming requests queue and the client list - all populated by
 // the demo seed.
+//
+// Most scenes are recorded clips: the pointer works through the real lead
+// pipeline, opens a contract, switches the request tabs and searches the
+// client list, so the reel shows the business being run.
 
-import {OVERLAY_SCRIPT, goTo, signIn} from '../../lib/ww.mjs';
+import {OVERLAY_SCRIPT, goTo, hoverControls, idlePointer, signIn} from '../../lib/ww.mjs';
 
 export default {
   title: 'WeddingWise - running your vendor business',
@@ -30,13 +34,16 @@ export default {
   scenes: [
     {
       id: 's1-dashboard',
+      media: 'clip',
       prepare: async (page) => {
         await goTo(page, '/vendor/dashboard', 4500);
       },
-      settleMs: 1500,
-      target: 'h1',
-      action: 'none',
-      zoom: 1.2,
+      settleMs: 800,
+      record: async (page, rec) => {
+        await hoverControls(page, rec, {count: 4, pause: 700, left: 300});
+        await rec.scroll(320);
+        await rec.pause(900);
+      },
       script:
         'Aegean Photography opens on its business dashboard: rating, plan, and verified status at the top, with your inbox and profile one click away.',
     },
@@ -49,8 +56,9 @@ export default {
       },
       settleMs: 800,
       record: async (page, rec) => {
-        await rec.click('button:has-text("booked (1)")');
+        await rec.click('button:visible:has-text("booked (1)")');
         await rec.pause(1600);
+        await hoverControls(page, rec, {count: 3, pause: 700, left: 300});
       },
       script:
         'Every enquiry becomes a lead in a real pipeline. New, inquiry, quote sent, negotiation, booked, completed - you always know exactly where each one stands.',
@@ -58,39 +66,51 @@ export default {
 
     {
       id: 's2b-financials',
+      media: 'clip',
       prepare: async (page) => {
         await goTo(page, '/vendor/financials', 3500);
       },
-      settleMs: 1500,
-      target: 'h1',
-      action: 'none',
-      zoom: 1.25,
+      settleMs: 800,
+      record: async (page, rec) => {
+        await rec.click('button:visible:has-text("Elena & Markos Wedding")');
+        await rec.pause(1500);
+        await hoverControls(page, rec, {count: 3, pause: 700, left: 300});
+        await idlePointer(page, rec, 2);
+      },
       script:
         'Contracts and invoices sit against the wedding they belong to, so you always know what is owed, what is paid, and what is outstanding.',
     },
 
     {
       id: 's3-requests',
+      media: 'clip',
       prepare: async (page) => {
         await goTo(page, '/vendor/requests', 3500);
       },
-      settleMs: 1500,
-      target: 'h1',
-      action: 'none',
-      zoom: 1.25,
+      settleMs: 800,
+      record: async (page, rec) => {
+        await rec.click('button:visible:has-text("Couple inquiries")');
+        await rec.pause(1400);
+        await rec.click('button:visible:has-text("Booking requests")');
+        await rec.pause(1400);
+        await hoverControls(page, rec, {count: 2, pause: 700, left: 300});
+      },
       script:
         'Planner invitations, couple inquiries, and booking requests all arrive in one queue, so nothing waits in a personal inbox to be answered.',
     },
 
     {
       id: 's4-clients',
+      media: 'clip',
       prepare: async (page) => {
         await goTo(page, '/vendor/clients', 3500);
       },
-      settleMs: 1500,
-      target: 'h1',
-      action: 'none',
-      zoom: 1.25,
+      settleMs: 800,
+      record: async (page, rec) => {
+        await rec.type('input:visible[placeholder*="Search by name"]', 'maria');
+        await rec.pause(1700);
+        await hoverControls(page, rec, {count: 2, pause: 700, left: 300});
+      },
       script:
         'Once you are booked, the wedding becomes a client workspace with its own bookings, contract, invoices, and next action.',
     },
@@ -110,25 +130,35 @@ export default {
 
     {
       id: 's5-calendar',
+      media: 'clip',
       prepare: async (page) => {
         await goTo(page, '/vendor/calendar', 3500);
       },
-      settleMs: 1500,
-      target: 'h1',
-      action: 'none',
-      zoom: 1.2,
+      settleMs: 800,
+      record: async (page, rec) => {
+        await rec.click('button:visible:has-text("Today")');
+        await rec.pause(1200);
+        await hoverControls(page, rec, {count: 3, pause: 700, left: 300});
+      },
       script:
         'A calendar of the dates you have blocked, so couples can only ask you for days you actually work.',
     },
-  {
+
+    {
       id: 's6-public-profile',
+      media: 'clip',
       prepare: async (page) => {
         await goTo(page, '/vendors/aegean-photography', 3500);
       },
-      settleMs: 1500,
-      target: 'h1',
-      action: 'none',
-      zoom: 1.25,
+      settleMs: 800,
+      record: async (page, rec) => {
+        await rec.click('button:visible[aria-label="Next image"]');
+        await rec.pause(1100);
+        await rec.click('button:visible:has-text("Gallery")');
+        await rec.pause(1300);
+        await rec.moveTo('button:visible:has-text("Request Booking")');
+        await rec.pause(900);
+      },
       script:
         'And the same profile is what a couple lands on when they find you, with your gallery, your pricing, and a booking request button.',
     },

@@ -18,10 +18,30 @@ const loadStoryboard = async ({props}: {props: Props}) => {
   const raw: Storyboard = await fetch(staticFile('storyboard.json')).then((r) => r.json());
   // The feed cut drops scenes BEFORE the timeline is measured, so the frame
   // count matches what actually plays.
-  const storyboard: Storyboard = props.sceneIds
+  const cut: Storyboard = props.sceneIds
     ? {...raw, scenes: raw.scenes.filter((s) => props.sceneIds!.includes(s.id))}
     : raw;
+  const storyboard = await attachVerticalFrames(cut);
   return {durationInFrames: totalFrames(storyboard), props: {...props, storyboard}};
+};
+
+// Where each scene's content sits in the frame, measured from the capture by
+// lib/vertical-frames.mjs. The 9:16 vertical pushes its view toward it.
+const attachVerticalFrames = async (storyboard: Storyboard): Promise<Storyboard> => {
+  const measured: Record<
+    string,
+    {target: number; subject: number | null; window: [number, number]; backdrop?: string}
+  > = await fetch(staticFile('vertical-frames.json'))
+    .then((r) => (r.ok ? r.json() : {}))
+    .catch(() => ({}));
+  return {
+    ...storyboard,
+    scenes: storyboard.scenes.map((s) =>
+      measured[s.id]
+        ? {...s, verticalFrame: measured[s.id], verticalBackdrop: measured[s.id].backdrop}
+        : s,
+    ),
+  };
 };
 
 const DemoWide: React.FC<Props> = (p) => (

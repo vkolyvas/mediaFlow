@@ -1,7 +1,7 @@
 // Render helper: picks the composition, flags, and output name for a project.
 //
 // Usage: npm run render -- <project> [--vertical] [--portrait] [--square] [--instagram]
-//                                    [--gif] [--no-captions] [--stems]
+//                                    [--gif] [--no-captions] [--stems] [--concurrency=N]
 //                                    [--caption-theme=outline|pill|bar] [--caption-size=sm|md|lg]
 //                                    [--caption-position=bottom|top] [--caption-highlight=dim|pill|wipe]
 //                                    [--caption-literal-color=#hex]
@@ -22,7 +22,7 @@
 //                    narration.mp3  timeline-aligned narration track
 //                    captions.srt   subtitles matching the same timeline
 import {execFileSync} from 'node:child_process';
-import {existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync} from 'node:fs';
+import {existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync} from 'node:fs';
 
 const args = process.argv.slice(2);
 const project = args.find((a) => !a.startsWith('--'));
@@ -45,6 +45,9 @@ const captionOverride = {
   literalColor: flagVal('caption-literal-color'), // tint for double-quoted UI literals (default sky #7dd3fc)
 };
 const caption = Object.fromEntries(Object.entries(captionOverride).filter(([, v]) => v));
+// Frames rendered at once. Lower it when the machine runs out of memory on
+// the tall 9:16 render.
+const concurrency = flagVal('concurrency');
 
 // Aspect-ratio variants. --instagram renders all three.
 const VARIANTS = {vertical: 'DemoVertical', portrait: 'DemoPortrait', square: 'DemoSquare'};
@@ -91,17 +94,71 @@ const archive = (out) => {
   console.log(`archived previous render -> ${dir}/${stamp}-${base}`);
 };
 
+const remotionArgs = (composition, out, props, extra = []) => [
+  'remotion', 'render', 'render/src/index.ts', composition, out,
+  `--public-dir=${publicDir}`,
+  '--timeout=90000',
+  `--props=${JSON.stringify(props)}`,
+  // How many frames Remotion renders at once. The 1080x1920 vertical queues
+  // whole frames in the compositor, so on a small machine the default
+  // concurrency runs it out of memory and the render dies.
+  ...(concurrency ? [`--concurrency=${concurrency}`] : []),
+  ...extra,
+];
+
+// How many frames the composition actually plays - Remotion knows, and its
+// number is the one the render uses.
+const compositionFrames = (composition, props) => {
+  const out = execFileSync(
+    'npx',
+    ['remotion', 'compositions', 'render/src/index.ts',
+      `--public-dir=${publicDir}`, `--props=${JSON.stringify(props)}`],
+    {encoding: 'utf8'},
+  );
+  const line = out.split('\n').find((l) => l.trim().startsWith(composition));
+  const m = line && line.match(/(\d+)\s+\(/);
+  return m ? Number(m[1]) : 0;
+};
+
+// The compositor keeps every video frame it extracts in memory (~10 MB per
+// 4K frame), so a full-length render needs far more RAM than the machine has
+// and dies around frame 800. Rendering the timeline in chunks keeps each
+// compositor run small; the chunks are then joined back into one file.
+const CHUNK_FRAMES = 480;
+
+const renderChunked = (out, props, composition) => {
+  const total = compositionFrames(composition, props);
+  if (!total) throw new Error(`${composition}: could not read the frame count`);
+  const dir = `${outDir}/chunks`;
+  mkdirSync(dir, {recursive: true});
+  const base = out.split('/').pop();
+  const files = [];
+  for (let start = 0; start < total; start += CHUNK_FRAMES) {
+    const end = Math.min(total - 1, start + CHUNK_FRAMES - 1);
+    const file = `${dir}/${base}-${start}.mp4`;
+    console.log(`\n--- chunk ${start}-${end} of ${total} ---`);
+    execFileSync('npx', remotionArgs(composition, file, props, [`--frames=${start}-${end}`]), {
+      stdio: 'inherit',
+    });
+    files.push(file);
+  }
+  const list = `${dir}/${base}.txt`;
+  // the concat demuxer resolves relative paths against the list's own folder
+  writeFileSync(list, files.map((f) => `file '${f.split('/').pop()}'`).join('\n') + '\n');
+  execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'concat', '-safe', '0', '-i', list, '-c', 'copy', out]);
+  for (const f of files) rmSync(f);
+  rmSync(list);
+};
+
 const renderComp = (out, props, composition = comp) => {
   archive(out);
-  execFileSync(
-    'npx',
-    ['remotion', 'render', 'render/src/index.ts', composition, out,
-      `--public-dir=${publicDir}`,
-      '--timeout=90000',
-      `--props=${JSON.stringify(props)}`,
-      ...(gif ? ['--codec=gif', '--every-nth-frame=2', '--scale=0.5'] : [])],
-    {stdio: 'inherit'},
-  );
+  if (composition === 'DemoVertical') {
+    renderChunked(out, props, composition);
+  } else {
+    execFileSync('npx', remotionArgs(composition, out, props, gif ? ['--codec=gif', '--every-nth-frame=2', '--scale=0.5'] : []), {
+      stdio: 'inherit',
+    });
+  }
   invalidateMix(out);
 };
 
@@ -149,6 +206,14 @@ const feedSceneIds = (sb) => {
 };
 
 if (!stems) {
+  // Measure where each scene's content sits in the frame before rendering: the
+  // 9:16 vertical pushes its view toward that spot. Cheap (one ffmpeg pass per
+  // scene) and it keeps the vertical from slicing the page at a blank column.
+  try {
+    execFileSync('node', ['lib/vertical-frames.mjs', project], {stdio: 'inherit'});
+  } catch (err) {
+    console.warn(`vertical-frames: analysis failed (${err.message}) - the vertical falls back to the cursor`);
+  }
   if (!wanted.length) {
     const out = `${outDir}/${project}${noCaptions ? '-nocaptions' : ''}.${gif ? 'gif' : 'mp4'}`;
     renderComp(out, {storyboard: null, captions: !noCaptions, ...captionProp});

@@ -18,6 +18,10 @@ import {pathToFileURL} from 'node:url';
 const execFileP = promisify(execFile);
 
 const VIEWPORT = {width: 1920, height: 1080};
+// Clips are recorded at 2x. The 9:16 render crops a 607px-wide window out of
+// the 1920x1080 frame and blows it up to 1080 - a 1x recording would be
+// upscaled and read as out of focus. At 2x the crop samples real pixels.
+const VIDEO_SIZE = {width: 3840, height: 2160};
 const PHONE_VIEWPORT = {width: 390, height: 844};
 
 const project = process.argv[2];
@@ -45,7 +49,7 @@ const contextOptions = {
   viewport: VIEWPORT,
   deviceScaleFactor: 2,
   colorScheme: flow.colorScheme ?? 'light',
-  recordVideo: {dir: recDir, size: VIEWPORT},
+  recordVideo: {dir: recDir, size: VIDEO_SIZE},
 };
 let browser = null;
 let context;
@@ -181,6 +185,17 @@ const makeRecorder = (clipStart, seedPos) => {
       events.push({t: now(), type: 'click', x: Math.round(pt.x), y: Math.round(pt.y)});
       await page.mouse.down();
       await page.mouse.up();
+    },
+    // Move the pointer to a point WITHOUT clicking - for hovers over cards,
+    // charts and list rows that have no selector worth hard-coding.
+    hoverPoint: async (pt) => {
+      await moveTo({x: Math.round(pt.x), y: Math.round(pt.y)});
+      await page.waitForTimeout(180);
+    },
+    // Scroll the page under the pointer, then let the frame settle.
+    scroll: async (dy) => {
+      await page.mouse.wheel(0, dy);
+      await page.waitForTimeout(700);
     },
     // Press-and-drag on an element (e.g. a range slider): mousedown at its
     // center, eased horizontal drag to `fraction` of its width, release.
