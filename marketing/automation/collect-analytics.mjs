@@ -5,6 +5,8 @@
  *   node automation/collect-analytics.mjs [--days 7]
  */
 import { listPosts, insertMetrics, closeDb } from '../lib/db.mjs';
+import { STATES } from '../lib/state.mjs';
+import { outcomeFromPostiz, applyPostizState } from '../lib/publish-state.mjs';
 import * as postiz from '../lib/postiz.mjs';
 import { normaliseMetrics, metricDate } from '../lib/metrics.mjs';
 
@@ -16,6 +18,42 @@ function parseArgs(argv) {
   return args;
 }
 
+/**
+ * Brings the local state back in line with Postiz.
+ *
+ * Postiz publishes on its own schedule and nobody tells us that it did, so
+ * without this the pipeline stops at SCHEDULED for ever and the post never
+ * reaches the report. Postiz holds the truth for every post it has: the post
+ * is PUBLISHED once it has gone out, and ERROR when the platform refused it.
+ */
+async function reconcileWithPostiz(posts) {
+  const scheduled = posts.filter((p) => p.state === STATES.SCHEDULED && p.postizPostId);
+  if (!scheduled.length) return { published: 0, failed: 0 };
+
+  const dates = scheduled
+    .map((p) => p.scheduled_at)
+    .filter(Boolean)
+    .sort();
+  const start = dates[0] || new Date(Date.now() - 30 * 86400000).toISOString();
+  const end = new Date(Date.now() + 30 * 86400000).toISOString();
+
+  const remote = await postiz.listPosts({ startDate: start, endDate: end });
+  const byId = new Map(remote.map((p) => [String(p.id), p]));
+
+  let published = 0;
+  let failed = 0;
+  for (const post of scheduled) {
+    const live = byId.get(String(post.postizPostId));
+    if (!live) continue;
+    const outcome = outcomeFromPostiz(live);
+    if (!outcome) continue;
+    applyPostizState(post, live);
+    if (outcome.state === STATES.PUBLISHED) published += 1;
+    if (outcome.state === STATES.FAILED) failed += 1;
+  }
+  return { published, failed };
+}
+
 async function main() {
   const args = parseArgs(process.argv);
   const posts = listPosts({}).filter((p) => p.postizPostId);
@@ -24,6 +62,16 @@ async function main() {
     console.log('No posts have a Postiz id yet. Run `npm run schedule` first.');
     closeDb();
     return;
+  }
+
+  try {
+    const { published, failed } = await reconcileWithPostiz(posts);
+    if (published || failed) {
+      console.log(`${published} post(s) published, ${failed} failed, per Postiz.`);
+    }
+  } catch (err) {
+    // Postiz being unreachable must not cost us the analytics we can get.
+    console.error(`Could not reconcile the published state: ${err.message}`);
   }
 
   let collected = 0;

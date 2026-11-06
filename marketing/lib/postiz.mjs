@@ -196,10 +196,20 @@ export async function createPost({ content, media = [], alt = [], integrationId,
   };
 }
 
-/** The posts Postiz knows about. */
-export async function listPosts() {
+/**
+ * The posts Postiz knows about.
+ *
+ * The window matters: Postiz answers with the posts whose publish date falls
+ * inside it, and defaults to the thirty days either side of today. A post we
+ * scheduled further out would not be in the default answer, so the caller
+ * can pass the range it cares about.
+ */
+export async function listPosts({ startDate, endDate } = {}) {
   requireEnv('postizApiKey');
-  const stdout = await run(['posts:list']);
+  const args = ['posts:list'];
+  if (startDate) args.push('--startDate', new Date(startDate).toISOString());
+  if (endDate) args.push('--endDate', new Date(endDate).toISOString());
+  const stdout = await run(args);
   const parsed = parseJsonOutput(stdout);
   const list = Array.isArray(parsed) ? parsed : parsed?.output || parsed?.posts || [];
   return Array.isArray(list) ? list : [];

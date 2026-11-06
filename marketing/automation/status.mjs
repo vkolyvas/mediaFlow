@@ -8,6 +8,7 @@
  *   node automation/status.mjs
  */
 import { all, listPosts, closeDb } from '../lib/db.mjs';
+import { env } from '../lib/config.mjs';
 import { STATES } from '../lib/state.mjs';
 
 function countByState() {
@@ -58,14 +59,44 @@ function main() {
     }
   }
 
+  // A post without media cannot be scheduled, and the failure the scheduler
+  // would print says nothing about the render that was never run.
+  const withoutMedia = posts.filter(
+    (p) =>
+      ['reel', 'carousel', 'story'].includes(p.format) &&
+      !(p.media || []).length &&
+      [STATES.VALIDATED, STATES.APPROVED].includes(p.state),
+  );
+  if (withoutMedia.length) {
+    console.log(`\n${withoutMedia.length} post(s) have no rendered media yet:`);
+    for (const post of withoutMedia.slice(0, 10)) {
+      console.log(`  ${post.id}  ${post.format}`);
+    }
+    console.log('\nRender them:  npm run render');
+  }
+
   const metrics = all('SELECT COUNT(*) AS count FROM metrics')[0]?.count || 0;
   const conversions = all('SELECT COUNT(*) AS count FROM conversions')[0]?.count || 0;
   console.log(`\nTracking: ${metrics} metric snapshot(s), ${conversions} conversion(s).`);
-  if (!metrics || !conversions) {
+  if (!metrics) {
     console.log(
-      '  Conversions stay at zero until the app-side UTM capture is deployed. ' +
-        'Without it the report can rank reach but cannot rank registrations.',
+      '  No reach yet. Metrics arrive once a post has been out for a day, and the ' +
+        'collector runs on Mondays (npm run collect).',
     );
+  }
+  if (!conversions) {
+    if (!env.wwInternalToken) {
+      console.log(
+        '  Conversions need WW_INTERNAL_TOKEN in marketing/.env - see marketing/ENV.md. ' +
+          'Without it the report can rank reach but cannot rank registrations.',
+      );
+    } else {
+      console.log(
+        '  The app-side UTM capture is configured (WW_INTERNAL_TOKEN is set). ' +
+          'Registrations and enquiries are pulled on Mondays (npm run collect-conversions), ' +
+          'and only a post that carries a tracked link can be attributed.',
+      );
+    }
   }
   console.log('');
 }
