@@ -47,7 +47,7 @@ export const env = {
   postizApiKey: process.env.POSTIZ_API_KEY || '',
   postizInstagramId: process.env.POSTIZ_INSTAGRAM_ID || '',
   postizFacebookId: process.env.POSTIZ_FACEBOOK_ID || '',
-  assetsDir: path.resolve(ROOT, process.env.MARKETING_ASSETS_DIR || './assets/generated'),
+  assetsDir: path.resolve(ROOT, process.env.MARKETING_ASSETS_DIR || './assets'),
   utmMedium: process.env.UTM_MEDIUM || 'social',
   publicUrl: (process.env.MARKETING_PUBLIC_URL || process.env.WW_SITE_URL || 'https://weddingwise.gr').replace(/\/+$/, ''),
 };

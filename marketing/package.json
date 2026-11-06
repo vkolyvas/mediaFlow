@@ -11,6 +11,7 @@
     "calendar": "node --env-file-if-exists=.env automation/build-calendar.mjs",
     "generate": "node --env-file-if-exists=.env automation/generate-content.mjs",
     "validate": "node --env-file-if-exists=.env automation/validate-content.mjs",
+    "render": "node --env-file-if-exists=.env automation/render-media.mjs",
     "approve": "node --env-file-if-exists=.env automation/approve-content.mjs",
     "reject": "node --env-file-if-exists=.env automation/approve-content.mjs --reject",
     "schedule": "node --env-file-if-exists=.env automation/schedule-content.mjs",
@@ -21,6 +22,7 @@
     "test": "node --disable-warning=ExperimentalWarning --test tests/*.test.mjs"
   },
   "dependencies": {
+    "playwright-core": "^1.61.1",
     "postiz": "^2.0.27"
   }
 }

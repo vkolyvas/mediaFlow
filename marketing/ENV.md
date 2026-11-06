@@ -36,7 +36,7 @@ it. Copy `marketing/.env.example` to `marketing/.env` and fill it in.
 
 | Variable | Required | Default | Notes |
 | --- | --- | --- | --- |
-| `MARKETING_ASSETS_DIR` | no | `./assets/generated` | Where rendered media is written before it is uploaded. |
+| `MARKETING_ASSETS_DIR` | no | `./assets` | Root the rendered media is written to before it is uploaded. The renderer writes to `<dir>/rendered/<post-id>/`. |
 | `MARKETING_DB_PATH` | no | `.data/marketing.db` | The SQLite file. The tests point this at a temp directory. |
 | `UTM_MEDIUM` | no | `social` | The `utm_medium` on every published link. |
 | `MARKETING_PUBLIC_URL` | no | `WW_SITE_URL` | The public base used in reports. |
