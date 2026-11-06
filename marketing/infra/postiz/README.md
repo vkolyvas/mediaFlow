@@ -50,6 +50,44 @@ Docker is installed on the development host (Engine 29.9.2, compose v5.6.1).
 `setup.sh` still checks for it and prints the install command rather than
 failing obscurely.
 
+## The public hostname
+
+On the production host Postiz is reached at **`https://postiz.weddingwise.gr`**.
+There is no reverse proxy on the host: the Cloudflare Tunnel connector that
+already serves the app serves Postiz too, through one ingress rule.
+
+```yaml
+# /etc/cloudflared/config.yml
+ingress:
+  - hostname: api.weddingwise.gr
+    service: http://127.0.0.1:8000
+  - hostname: weddingwise.gr
+    service: http://127.0.0.1:3000
+  - hostname: www.weddingwise.gr
+    service: http://127.0.0.1:3000
+  - hostname: postiz.weddingwise.gr
+    service: http://127.0.0.1:4007
+  - service: http_status:404
+```
+
+The rule lives in `/etc/cloudflared/config.yml` (root:cloudflared 0640). The
+source of truth for it is `deploy/cloudflared/config.yml` in the app repo, and
+`sudo deploy/install-cloudflared.sh` writes the installed copy.
+
+Two things follow from the hostname, and both are outside this repo:
+
+1. **A DNS record.** `postiz.weddingwise.gr` must be a CNAME to
+   `95b94ea2-d0db-4f3b-a19d-dac2e59f9ab3.cfargotunnel.com`, proxied. The
+   connector is in locally-managed mode, so the hostname is not served until the
+   record exists.
+2. **A public media origin.** Instagram fetches the media URLs Meta verifies,
+   so those URLs have to be reachable from the internet - see *Media URLs*.
+
+`MAIN_URL`, `FRONTEND_URL` and `NEXT_PUBLIC_BACKEND_URL` in `.env` are set to
+the public hostname for the same reason: `FRONTEND_URL` is what Postiz uses
+when it builds the OAuth redirect, and `MAIN_URL` is the CORS origin it
+accepts.
+
 ## Bringing it up
 
 ```bash
@@ -142,8 +180,20 @@ App with an Instagram Business account attached.
 3. App settings -> Basic: set the app domain and the privacy policy URL
    (both must be publicly reachable over HTTPS - Postiz itself can serve as
    the privacy URL host).
-4. Facebook Login -> Settings: add the OAuth redirect URI
-   `https://postiz.your-domain.gr/api/public/v1/integrations/facebook/callback`.
+4. Facebook Login -> Settings: add the OAuth redirect URIs. Postiz builds
+   them from `FRONTEND_URL`, so with the production hostname they are:
+
+   ```
+   https://postiz.weddingwise.gr/integrations/social/facebook
+   https://postiz.weddingwise.gr/integrations/social/instagram
+   ```
+
+   Both are needed: the Facebook provider and the Instagram provider each
+   register their own. The callback is a page of the Postiz frontend, not a
+   backend route - the page hands the code to the API.
+   (`facebook.provider.ts` and `instagram.provider.ts` in
+   `libraries/nestjs-libraries/src/integrations/social/` are the source of
+   truth for these strings.)
 5. App review: request the permissions that publishing needs -
    `instagram_basic`, `instagram_content_publish`,
    `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`,
@@ -174,6 +224,23 @@ This is also why `STORAGE_PROVIDER=cloudflare` (R2) is the right production
 setting: with `local` storage the uploads live inside the container volume
 and are served by Postiz itself, which works but ties every asset's lifetime
 to that volume. R2 gives public, durable URLs.
+
+Postiz builds every media URL as `CLOUDFLARE_BUCKET_URL + '/' + <object name>`
+(`media.controller.ts`), so the bucket has to be **publicly readable** - a
+private bucket produces URLs that return 403 to Meta, and the publish fails at
+the last step with an error that points nowhere near the cause.
+
+The production bucket is `socials` in the R2 account `956a6b87…` - the same
+account the off-site backups live in, not the app's own R2 account. Two
+consequences:
+
+- `CLOUDFLARE_ACCESS_KEY` / `CLOUDFLARE_SECRET_ACCESS_KEY` must be an **R2 API
+  token scoped to that one bucket** with Object Read & Write. A token scoped to
+  another bucket is refused with `403 AccessDenied` on every upload.
+- `CLOUDFLARE_BUCKET_URL` is the bucket's public base - the `r2.dev` dev URL
+  (`https://pub-….r2.dev`) or a custom domain on it. It is not the S3 endpoint:
+  the S3 endpoint (`https://<account>.r2.cloudflarestorage.com`) is where the
+  files are written, and it is not reachable as a public media URL.
 
 ## Backup
 
