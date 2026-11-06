@@ -44,17 +44,17 @@ The campaign string is written into the `campaigns` table once and never
 rewritten, so it is a stable join key between a post and the registration
 that came back from it.
 
-The site currently strips query strings - the first-party tracker records the
-pathname only, and GA4 is sent with the query removed. Attribution therefore
-required a change in the app repo: a capture at the edge that stores the UTM
-parameters against the existing session id, attached to
-`funnel.signup_completed` and to `vendor_leads`, exposed through a read-only
-internal endpoint. That branch is `feature/weddingwise-utm-capture` in
-`auth-weddingwise`.
+The site originally stripped query strings - the first-party tracker recorded
+the pathname only, and GA4 was sent with the query removed. Attribution
+therefore required a change in the app repo: a capture at the edge that stores
+the UTM parameters against the existing session id, attached to the signup and
+the vendor lead, exposed through a read-only internal endpoint. That work is
+**deployed** - the endpoint answers on `api.weddingwise.gr`, and the app repo
+(`auth-weddingwise`) holds it on `master`.
 
-**Until that is deployed, registrations cannot be attributed and the weekly
-report can rank reach but not outcomes.** The report says so explicitly
-rather than presenting a zero as a result.
+**Registrations are attributed.** The endpoint's answer, its types and the
+surfaces each one lives on are in `tracking.md`; the two engines' UTM shapes
+differ, so the join key is `utm_source` + `utm_campaign`.
 
 ## The weekly loop
 

@@ -2,7 +2,7 @@
 
 The engine is a directory of scripts and one SQLite file. There is nothing to
 build and nothing to run as a service. What needs deploying is Postiz, and
-what needs deploying in the app repo is the UTM capture branch.
+the app repo carries the attribution work that this engine reads.
 
 ## What has to exist before anything is published
 
@@ -12,7 +12,7 @@ what needs deploying in the app repo is the UTM capture branch.
 | Docker Engine | the host | installed (29.9.2, compose v5.6.1) |
 | Instagram + Facebook accounts connected | in Postiz | needs Meta app credentials |
 | `ANTHROPIC_API_KEY` | the engine's environment | not present on this host |
-| UTM capture branch | `auth-weddingwise`, branch `feature/weddingwise-utm-capture` | PR open, not merged, not deployed |
+| UTM capture + attribution | `auth-weddingwise`, on `master` | **deployed** - the endpoint answers on `api.weddingwise.gr` |
 | `MARKETING_INTERNAL_TOKEN` / `WW_INTERNAL_TOKEN` | both repos | generated and set |
 
 ## 1. Postiz
@@ -25,9 +25,9 @@ cd marketing/infra/postiz
 See `infra/postiz/README.md` for the Meta app setup, the R2 storage, the
 backup and the AGPL-3.0 obligations.
 
-## 2. The UTM capture branch
+## 2. The app side
 
-In `auth-weddingwise`:
+In `auth-weddingwise` the attribution work is on `master` and **deployed**:
 
 ```bash
 npm run migrate                       # applies 0342_marketing_attribution
@@ -38,7 +38,8 @@ The frontend change (the two cookies) ships with the same deployment as the
 backend change - the backend does nothing without the cookie, and the cookie
 does nothing without the backend.
 
-Full explanation: `auth-weddingwise/docs/MARKETING_ATTRIBUTION.md`.
+Full explanation: `auth-weddingwise/docs/MARKETING_ATTRIBUTION.md`. What the
+endpoint answers and where each number is read: `strategy/tracking.md`.
 
 ## 3. The engine
 
@@ -61,12 +62,13 @@ Then check the two directions work before publishing anything:
 
 ```bash
 npm run status                                  # the queue
+npm run render -- --dry-run                     # the media the queue is missing
 npm run schedule -- --dry-run                   # Postiz is reachable and the slots are right
 npm run collect-conversions                      # the app endpoint is reachable
 ```
 
 `collect-conversions` should print "Fetched N conversion(s)". If it prints a
-404, the app branch is not deployed.
+404, `WW_API_BASE_URL` is pointing at the wrong host.
 
 ## 4. The weekly rhythm
 
@@ -113,7 +115,7 @@ repository. Copy it off the host.
 | --- | --- | --- |
 | The Anthropic key is missing or wrong | `npm run generate` fails, the posts stay in `IDEA` | fix the key, re-run |
 | Postiz is unreachable | `npm run schedule` exits with a clear message | check the instance, re-run; nothing was half-published |
-| The app branch is not deployed | `collect-conversions` reports a 404 | deploy the branch; the report says conversions are zero rather than pretending |
+| The app endpoint is not reachable | `collect-conversions` reports a 404 | check `WW_API_BASE_URL` and `WW_INTERNAL_TOKEN`; the report says conversions are zero rather than pretending |
 | The landing page was renamed | validation fails on `unknown_landing_page` | update `lib/seo-pages.mjs`, re-validate |
 | A vendor was renamed or removed | validation fails on `vendor_drift` | regenerate the post |
 | The demo seed rows change | `demo-filter` drops them; with `WW_DEMO_STRICT=1` it errors | update `DEMO_SLUGS` in `lib/demo-filter.mjs` |

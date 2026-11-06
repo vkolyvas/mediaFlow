@@ -107,8 +107,9 @@ published immediately - an immediate post would slip past the approval.
 ### 6. Measurement (`collect-analytics.mjs`, `collect-conversions.mjs`)
 
 Postiz gives the reach side: `metrics`. The app gives the outcome side:
-`conversions`, pulled from the internal endpoint that the UTM capture branch
-exposes.
+`conversions`, pulled from the internal endpoint on `api.weddingwise.gr`. The
+two meet on `utm_source` + `utm_campaign`; the surfaces each one lives on are
+in `strategy/tracking.md`.
 
 ### 7. The report (`report.mjs`)
 

@@ -22,7 +22,7 @@ WeddingWise API ──▶ calendar ──▶ content ──▶ validation ──
 cd marketing
 npm install
 cp .env.example .env      # fill in ANTHROPIC_API_KEY, POSTIZ_API_KEY, ...
-npm test                  # 92 tests, no network, no database needed
+npm test                  # 106 tests, no network calls
 npm run calendar          # 30 days of concepts, two posts each
 npm run status            # where everything stands
 ```
@@ -32,12 +32,29 @@ The full loop, once Postiz and the API keys are in place:
 ```bash
 npm run generate          # ideas -> captions, scripts, visual briefs
 npm run validate          # the anti-fabrication gate
+npm run render            # the script -> the files Instagram and Facebook want
 npm run approve           # a human decides
 npm run schedule          # Postiz publishes at the planned local time
 npm run collect           # metrics from Postiz
 npm run collect-conversions  # registrations and enquiries from the app
 npm run report            # the weekly report
 ```
+
+## Where the tracking lives
+
+Three surfaces, one funnel — and the question "where do our acquisitions come
+from?" is answered in the admin UI, not here.
+
+| Surface | Holds |
+| --- | --- |
+| **Postiz** | the published posts and their per-post metrics (reach, likes, comments) |
+| **WeddingWise** | every conversion, in `marketing_attributions` — the source of truth. Read it in the admin UI: **Admin → Analytics → Acquisition** |
+| **mediaFlow** (this engine) | the join between them: campaigns, posts, metrics, and the conversions attributed to each post |
+
+The conversions arrive from the app's internal endpoint,
+`GET /api/v1/internal/marketing/conversions?since=…`, and the join key is
+`utm_source` + `utm_campaign`. The full map — the types, the endpoint contract
+and the trap that must not be broken — is in `strategy/tracking.md`.
 
 ## The commands
 
@@ -46,6 +63,7 @@ npm run report            # the weekly report
 | `npm run calendar` | Builds the concepts for the next 30 days: one per day per audience, two posts each (Instagram + Facebook). |
 | `npm run generate` | One LLM call per concept. Reads live vendor data, writes the caption, hashtags, CTA, reel script, slides, shot list and visual brief. |
 | `npm run validate` | Checks every generated post against the live listings and the anti-fabrication rules. A post that fails never reaches a human. |
+| `npm run render` | Renders the media a post needs: a carousel becomes 4:5 PNGs, a reel becomes a 9:16 MP4. Brand-native graphics, built from the brand's own type and colour, no photography. The files land in `assets/rendered/<post-id>/` and the paths are written onto the post. |
 | `npm run approve` | The approval gate. Prints a post in full - caption, link, slides, vendors used with their ratings and claim status - and waits for a decision. |
 | `npm run schedule` | Sends approved posts to Postiz. Uploads the media first, because Instagram rejects any URL Postiz has not verified. |
 | `npm run collect` | Pulls the performance of every published post into the `metrics` table. |
@@ -65,7 +83,7 @@ assets/        rendered media (gitignored)
 infra/postiz/  the self-hosted Postiz stack
 lib/           the engine
 automation/    the scripts the commands above run
-tests/         92 tests
+tests/         106 tests
 ```
 
 ## The three rules
@@ -92,13 +110,14 @@ A validator enforces all three, and a human approves everything. See
 | --- | --- |
 | `ARCHITECTURE.md` | How the engine is put together and why |
 | `ENV.md` | Every environment variable and where it comes from |
-| `DEPLOYMENT.md` | Running it for real: Postiz, cron, the app-side branch |
+| `DEPLOYMENT.md` | Running it for real: Postiz, cron, the app side |
 | `brand/brand-guidelines.md` | Colours, type, the logo, the three restrictions |
 | `brand/tone-of-voice.md` | What we say and what we do not say |
 | `brand/visual-guidelines.md` | Formats, the reel structure, the photography rule |
 | `strategy/audience-personas.md` | The two audiences and the vendor side |
 | `strategy/content-pillars.md` | The five pillars and the weekly shape |
 | `strategy/acquisition-strategy.md` | The funnel, the attribution, the weekly loop |
+| `strategy/tracking.md` | Where the tracking lives: Postiz vs the app vs this engine, the conversion types, the endpoint contract |
 | `infra/postiz/README.md` | The self-hosted Postiz, and its AGPL obligations |
 
 ## The state machine

@@ -9,9 +9,16 @@
  *   GET {WW_API_BASE_URL}/api/v1/internal/marketing/conversions?since=YYYY-MM-DD
  *   Authorization: Bearer {WW_INTERNAL_TOKEN}
  *
- * That endpoint is implemented in the auth-weddingwise repo (branch
- * feature/weddingwise-utm-capture). Until it exists, this script exits with a
- * clear message rather than failing obscurely.
+ * That endpoint is implemented in the auth-weddingwise repo and is deployed on
+ * api.weddingwise.gr. Until it exists, this script exits with a clear message
+ * rather than failing obscurely.
+ *
+ * THE DEFAULT-TYPE CONTRACT: this script asks for NO type filter, so the
+ * endpoint answers with `registration` and `enquiry` only - the two types
+ * below are the only ones it can receive. The app's other lifecycle types
+ * (claim_invitation, vendor_claim, ...) belong to the email engine and are
+ * read in the admin UI; asking for them here would file them as
+ * 'registration' and corrupt the weekly report. See strategy/tracking.md.
  *
  *   node automation/collect-conversions.mjs [--days 30] [--file conversions.json]
  */
@@ -50,8 +57,8 @@ async function fetchConversions(since) {
 
   if (res.status === 404) {
     throw new Error(
-      'The app returned 404 for the conversions endpoint. It has not been deployed yet - ' +
-        'see the UTM capture branch in auth-weddingwise.',
+      'The app returned 404 for the conversions endpoint. It is deployed on api.weddingwise.gr - ' +
+        'check WW_API_BASE_URL and the auth-weddingwise repo (master).',
     );
   }
   if (!res.ok) {
