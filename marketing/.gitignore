@@ -15,6 +15,8 @@ content/calendar.json
 content/drafts/
 analytics/weekly-reports/
 analytics/validation/
+# The cron output
+logs/
 
 # node_modules
 node_modules/
